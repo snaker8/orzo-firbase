@@ -4,12 +4,12 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --open",
+    "dev": "concurrently \"npm run server\" \"vite --open\"",
     "build": "vite build",
     "preview": "vite preview",
     "server": "node server.js",
     "prod": "npm run build && node server.js",
-    "start": "concurrently \"npm run server\" \"npm run dev\""
+    "start": "node server.js"
   },
   "dependencies": {
     "chokidar": "^3.5.3",
