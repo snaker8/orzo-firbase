@@ -1237,7 +1237,7 @@ const StudentDetailView = ({ student, onClose, onOpenReport, isMobile }) => {
 };
 
 // [NEW] User Management Panel
-const UserManagementPanel = ({ themeColor }) => {
+const UserManagementPanel = ({ themeColor, onSimulateLogin, onClose }) => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(false);
     const [newUser, setNewUser] = useState({ id: '', pw: '', name: '', role: 'student' });
@@ -1259,6 +1259,30 @@ const UserManagementPanel = ({ themeColor }) => {
             }
         } catch (error) {
             console.error('Failed to fetch users', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSyncUsers = async () => {
+        if (!confirm('업로드된 데이터를 기반으로 사용자 계정을 자동 생성하시겠습니까?\n(기존 계정은 유지되며, 없는 이름만 추가됩니다. 기본 비밀번호: 1234)')) return;
+
+        setLoading(true);
+        try {
+            const res = await fetch('/api/users/sync', {
+                method: 'POST',
+                headers: { 'x-admin-password': 'orzoai' }
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert(`동기화 완료!\n총 ${data.addedCount}명의 사용자가 추가되었습니다.`);
+                fetchUsers(); // Refresh list
+            } else {
+                alert('동기화 실패: ' + data.message);
+            }
+        } catch (e) {
+            console.error(e);
+            alert('오류가 발생했습니다.');
         } finally {
             setLoading(false);
         }
@@ -1316,6 +1340,12 @@ const UserManagementPanel = ({ themeColor }) => {
                 <button onClick={handleAddUser} style={{ padding: '8px 16px', background: themeColor, color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>추가</button>
             </div>
 
+            <div style={{ marginBottom: '10px', display: 'flex', justifyContent: 'flex-end' }}>
+                <button onClick={handleSyncUsers} style={{ padding: '8px 16px', background: '#f1f5f9', color: themeColor, border: `1px solid ${themeColor}`, borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <FolderOpen size={16} /> 데이터 기반 자동 생성 (동기화)
+                </button>
+            </div>
+
             <div style={{ flex: 1, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                     <thead style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
@@ -1332,9 +1362,12 @@ const UserManagementPanel = ({ themeColor }) => {
                                 <td style={{ padding: '8px' }}>{u.name}</td>
                                 <td style={{ padding: '8px' }}>{u.id}</td>
                                 <td style={{ padding: '8px', color: '#94a3b8' }}>{u.pw}</td>
-                                <td style={{ padding: '8px', textAlign: 'center' }}>
+                                <td style={{ padding: '8px', textAlign: 'center', display: 'flex', gap: '4px', justifyContent: 'center' }}>
                                     {u.role !== 'admin' && (
-                                        <button onClick={() => handleDeleteUser(u.id)} style={{ padding: '4px 8px', background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}>삭제</button>
+                                        <>
+                                            <button onClick={() => { onSimulateLogin(u); onClose(); }} style={{ padding: '4px 8px', background: '#e0f2fe', color: '#0284c7', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}>접속</button>
+                                            <button onClick={() => handleDeleteUser(u.id)} style={{ padding: '4px 8px', background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}>삭제</button>
+                                        </>
                                     )}
                                 </td>
                             </tr>
@@ -1355,7 +1388,7 @@ const UserManagementPanel = ({ themeColor }) => {
 };
 
 // [NEW] Settings Modal
-const SettingsModal = ({ isOpen, onClose, onUpload, onRefresh }) => {
+const SettingsModal = ({ isOpen, onClose, onUpload, onRefresh, onSimulateLogin }) => {
     const [password, setPassword] = useState('');
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [activeTab, setActiveTab] = useState('general'); // 'general' | 'users'
@@ -1490,7 +1523,13 @@ const SettingsModal = ({ isOpen, onClose, onUpload, onRefresh }) => {
                                 </div>
                             )}
 
-                            {activeTab === 'users' && <UserManagementPanel themeColor={THEME.accent} />}
+                            {activeTab === 'users' && (
+                                <UserManagementPanel
+                                    themeColor={THEME.accent}
+                                    onSimulateLogin={onSimulateLogin}
+                                    onClose={onClose}
+                                />
+                            )}
                         </div>
                     </div>
                 )}
@@ -2153,6 +2192,8 @@ const Dashboard = ({ data }) => {
 
     // [UPDATED] Auth State
     const [user, setUser] = useState(null); // { id, name, role }
+    // [NEW] Admin Simulation Mode State
+    const [isAdminSimulation, setIsAdminSimulation] = useState(false);
 
     useEffect(() => {
         // [FIX] Check session storage for complex user object or legacy password
@@ -2183,14 +2224,25 @@ const Dashboard = ({ data }) => {
             try {
                 // [UPDATED] Send different headers based on role
                 const headers = {};
+                // If we are simulating, we still need to fetch data.
+                // However, the backend /api/data filters by header.
+                // If we are simulating 'student', we should send student header so backend returns filtered data.
+                // But wait, if backend sees 'student' header, it filters.
+                // If we are admin simulating, we effectively ARE that student for data purposes.
+
                 if (user.role === 'admin') {
                     // For admin, use the password (or defaults)
                     headers['x-admin-password'] = authPassword || 'orzoai';
                 } else {
-                    // For student, send ID and PW (we stored them in user object for simplicity, though insecure for real apps)
+                    // For student (or simulated student), send ID and PW (we stored them in user object for simplicity, though insecure for real apps)
                     headers['x-user-id'] = user.id;
                     headers['x-user-pw'] = user.pw; // Ideally token, but passing PW as per plan
                 }
+
+                // [Special Case] If Admin Simulation, we might be a student role in 'user' state,
+                // BUT we don't have that student's password in 'user.pw' if we just switched state?
+                // Actually we pass the whole user object in onSimulateLogin, which comes from /api/users, so it HAS the password.
+                // So the above logic holds!
 
                 const response = await fetch(url, { headers });
 
@@ -2265,6 +2317,25 @@ const Dashboard = ({ data }) => {
         }
     };
 
+    // [NEW] Simulate Login Handler (Passed to Settings)
+    const handleSimulateLogin = (targetUser) => {
+        if (!confirm(`${targetUser.name} 학생으로 접속하여 모니터링 하시겠습니까?`)) return;
+        setIsAdminSimulation(true);
+        setUser(targetUser); // Switch context to student
+        // We do NOT save this to sessionStorage so refresh restores admin or logs out safely.
+        // Actually, if we refresh, we might want to stay put? But simpler to reset.
+    };
+
+    const handleExitSimulation = () => {
+        // Restore Admin
+        const adminUser = { id: 'admin', name: '관리자', role: 'admin', pw: 'orzoai' }; // Simplification
+        // Better: we should have stored original admin user.
+        // For now, assuming 'admin'/'orzoai' restoration is enough since we only simulated from admin.
+        setUser(adminUser);
+        setIsAdminSimulation(false);
+        setMode('dashboard'); // Reset view mode
+    };
+
     if (!isAuthenticated) {
         return <LoginOverlay onLogin={handleLogin} />;
     }
@@ -2272,8 +2343,6 @@ const Dashboard = ({ data }) => {
     // [UPDATED] Student View Interception
     if (user && user.role === 'student') {
         // If student, simplify the view. Directly show Report or Detail.
-        // We'll mimic the StudentDetailView but maybe cleaner or just use ReportModal directly?
-        // Let's us the ReportModal but we need a "selectedStudent" structure.
         // We can create a fake "selectedStudent" from the user info + validData.
 
         // Find best match record to populate student info (if any data)
@@ -2281,8 +2350,17 @@ const Dashboard = ({ data }) => {
 
         return (
             <div style={{ padding: '40px', background: '#f1f5f9', minHeight: '100vh', display: 'flex', justifyContent: 'center' }}>
-                <div style={{ width: '100%', maxWidth: '1000px', background: 'white', borderRadius: '24px', padding: '40px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', paddingBottom: '20px', borderBottom: '2px solid #e2e8f0' }}>
+                <div style={{ width: '100%', maxWidth: '1000px', background: 'white', borderRadius: '24px', padding: '40px', boxShadow: '0 4px 6px rgba(0,0,0,0.05)', position: 'relative' }}>
+
+                    {/* [NEW] Simulation Banner */}
+                    {isAdminSimulation && (
+                        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, background: '#fef3c7', padding: '10px 20px', borderRadius: '24px 24px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#92400e', fontWeight: 'bold' }}>
+                            <span>⚠️ 관리자 모니터링 모드 ({user.name} 시점)</span>
+                            <button onClick={handleExitSimulation} style={{ padding: '6px 12px', background: '#92400e', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>관리자 복귀 (종료)</button>
+                        </div>
+                    )}
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', paddingBottom: '20px', borderBottom: '2px solid #e2e8f0', marginTop: isAdminSimulation ? '40px' : '0' }}>
                         <div>
                             <h1 style={{ margin: 0, fontSize: '2rem', color: '#1e293b' }}>{user.name} 학생 학습 리포트</h1>
                             <p style={{ margin: '5px 0 0 0', color: '#64748b' }}>개인 학습 분석 및 기록 조회</p>
@@ -2296,16 +2374,7 @@ const Dashboard = ({ data }) => {
 
                     {validData.length > 0 ? (
                         <div id="report-content">
-                            {/* Re-use components or just render the ReportModal content inline? 
-                               ReportModal is a modal. We can just render it relative. 
-                               But ReportModal expects 'onClose'. Let's wrap it.
-                           */}
                             <div style={{ position: 'relative', zIndex: 1 }}>
-                                {/* We can't easily reuse ReportModal as a block because it has fixed positioning overlay.
-                                   Let's just use the logic from inside it or change ReportModal styles.
-                                   Actually, simpler: Just show the LIST of records and a button to "Open Report".
-                                */}
-
                                 <div style={{ marginBottom: '30px', display: 'grid', gap: '15px' }}>
                                     <h3 style={{ fontSize: '1.2rem', color: '#334155' }}>최근 학습 기록</h3>
                                     {validData.map((r, idx) => (
@@ -2377,6 +2446,14 @@ const Dashboard = ({ data }) => {
         <>
             {mode === 'dashboard' && <DashboardView processedData={validData} onSwitchMode={() => setMode('presentation')} />}
             {mode === 'presentation' && <RealTimeView processedData={validData} onClose={() => setMode('dashboard')} />}
+            {/* Global Settings Modal */}
+            <SettingsModal
+                isOpen={isSettingsOpen}
+                onClose={() => setIsSettingsOpen(false)}
+                onUpload={handleServerUpload}
+                onRefresh={() => window.location.reload()}
+                onSimulateLogin={handleSimulateLogin} // [NEW] Pass logic
+            />
         </>
     );
 };

@@ -464,6 +464,50 @@ app.post('/api/users', (req, res) => {
     }
 });
 
+app.post('/api/users/sync', (req, res) => {
+    const clientPw = req.headers['x-admin-password'];
+    if (!clientPw || clientPw !== ADMIN_PASSWORD) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    try {
+        const currentUsers = getUsers();
+        const existingIds = new Set(currentUsers.map(u => u.id));
+        const addedUsers = [];
+
+        // Scan cachedData for unique names
+        const studentNames = new Set();
+        cachedData.forEach(item => {
+            if (item.name) studentNames.add(item.name);
+        });
+
+        studentNames.forEach(name => {
+            // ID = Name (as requested), PW = '1234'
+            if (!existingIds.has(name)) { // ID uniqueness check
+                const newUser = {
+                    id: name,
+                    pw: '1234',
+                    name: name,
+                    role: 'student'
+                };
+                currentUsers.push(newUser);
+                addedUsers.push(newUser);
+                existingIds.add(name);
+            }
+        });
+
+        if (addedUsers.length > 0) {
+            fs.writeFileSync(USERS_FILE, JSON.stringify(currentUsers, null, 2), 'utf8');
+            console.log(`[Users] Synced. Added ${addedUsers.length} new users.`);
+        }
+
+        res.json({ success: true, addedCount: addedUsers.length, totalCount: currentUsers.length });
+    } catch (e) {
+        console.error('[Users] Sync failed', e);
+        res.status(500).json({ success: false, message: 'Failed to sync users' });
+    }
+});
+
 app.listen(PORT, '0.0.0.0', () => { // [UPDATED] Listen on all interfaces
     console.log(`=========================================`);
     console.log(`   ORZO DATA SERVER Running on Port ${PORT}`);
