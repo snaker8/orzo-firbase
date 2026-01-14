@@ -1832,7 +1832,7 @@ const DashboardMobile = ({
 
 
 // 3. DashboardContainer (Formerly DashboardView)
-const DashboardView = ({ processedData, onSwitchMode }) => {
+const DashboardView = ({ processedData, onSwitchMode, onSimulateLogin }) => {
     // ---- STATE ----
     const [selectedStudentName, setSelectedStudentName] = useState(null);
     const [selectedFolder, setSelectedFolder] = useState('전체');
@@ -1989,6 +1989,7 @@ const DashboardView = ({ processedData, onSwitchMode }) => {
                 onClose={() => setIsSettingsOpen(false)}
                 onUpload={handleServerUpload}
                 onRefresh={() => window.location.reload()}
+                onSimulateLogin={onSimulateLogin} // [NEW] Pass through
             />
         </>
     );
@@ -2444,16 +2445,8 @@ const Dashboard = ({ data }) => {
 
     return (
         <>
-            {mode === 'dashboard' && <DashboardView processedData={validData} onSwitchMode={() => setMode('presentation')} />}
+            {mode === 'dashboard' && <DashboardView processedData={validData} onSwitchMode={() => setMode('presentation')} onSimulateLogin={handleSimulateLogin} />}
             {mode === 'presentation' && <RealTimeView processedData={validData} onClose={() => setMode('dashboard')} />}
-            {/* Global Settings Modal */}
-            <SettingsModal
-                isOpen={isSettingsOpen}
-                onClose={() => setIsSettingsOpen(false)}
-                onUpload={handleServerUpload}
-                onRefresh={() => window.location.reload()}
-                onSimulateLogin={handleSimulateLogin} // [NEW] Pass logic
-            />
         </>
     );
 };
