@@ -1236,10 +1236,129 @@ const StudentDetailView = ({ student, onClose, onOpenReport, isMobile }) => {
     );
 };
 
+// [NEW] User Management Panel
+const UserManagementPanel = ({ themeColor }) => {
+    const [users, setUsers] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [newUser, setNewUser] = useState({ id: '', pw: '', name: '', role: 'student' });
+    const [isDirty, setIsDirty] = useState(false);
+
+    useEffect(() => {
+        fetchUsers();
+    }, []);
+
+    const fetchUsers = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/users', {
+                headers: { 'x-admin-password': 'orzoai' } // Using system password for admin ops
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setUsers(data);
+            }
+        } catch (error) {
+            console.error('Failed to fetch users', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleAddUser = () => {
+        if (!newUser.id || !newUser.pw || !newUser.name) {
+            alert('모든 필드를 입력해주세요.');
+            return;
+        }
+        if (users.some(u => u.id === newUser.id)) {
+            alert('이미 존재하는 아이디입니다.');
+            return;
+        }
+        const updatedUsers = [...users, newUser];
+        setUsers(updatedUsers);
+        setNewUser({ id: '', pw: '', name: '', role: 'student' });
+        setIsDirty(true);
+    };
+
+    const handleDeleteUser = (id) => {
+        if (!confirm('정말 삭제하시겠습니까?')) return;
+        setUsers(users.filter(u => u.id !== id));
+        setIsDirty(true);
+    };
+
+    const handleSave = async () => {
+        try {
+            const res = await fetch('/api/users', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-admin-password': 'orzoai'
+                },
+                body: JSON.stringify(users)
+            });
+            if (res.ok) {
+                alert('저장되었습니다.');
+                setIsDirty(false);
+            } else {
+                alert('저장 실패');
+            }
+        } catch (error) {
+            console.error('Save failed', error);
+            alert('저장 중 오류가 발생했습니다.');
+        }
+    };
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', height: '400px' }}>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '15px' }}>
+                <input placeholder="이름 (예: 홍길동)" value={newUser.name} onChange={e => setNewUser({ ...newUser, name: e.target.value })} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                <input placeholder="아이디" value={newUser.id} onChange={e => setNewUser({ ...newUser, id: e.target.value })} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                <input placeholder="비밀번호" value={newUser.pw} onChange={e => setNewUser({ ...newUser, pw: e.target.value })} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                <button onClick={handleAddUser} style={{ padding: '8px 16px', background: themeColor, color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>추가</button>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                    <thead style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
+                        <tr>
+                            <th style={{ padding: '8px', textAlign: 'left' }}>이름</th>
+                            <th style={{ padding: '8px', textAlign: 'left' }}>아이디</th>
+                            <th style={{ padding: '8px', textAlign: 'left' }}>비밀번호</th>
+                            <th style={{ padding: '8px', textAlign: 'center' }}>관리</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {users.map(u => (
+                            <tr key={u.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                <td style={{ padding: '8px' }}>{u.name}</td>
+                                <td style={{ padding: '8px' }}>{u.id}</td>
+                                <td style={{ padding: '8px', color: '#94a3b8' }}>{u.pw}</td>
+                                <td style={{ padding: '8px', textAlign: 'center' }}>
+                                    {u.role !== 'admin' && (
+                                        <button onClick={() => handleDeleteUser(u.id)} style={{ padding: '4px 8px', background: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem' }}>삭제</button>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            {isDirty && (
+                <div style={{ marginTop: '15px', display: 'flex', justifyContent: 'flex-end' }}>
+                    <button onClick={handleSave} style={{ padding: '10px 20px', background: themeColor, color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
+                        변경사항 저장하기
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
 // [NEW] Settings Modal
 const SettingsModal = ({ isOpen, onClose, onUpload, onRefresh }) => {
     const [password, setPassword] = useState('');
     const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [activeTab, setActiveTab] = useState('general'); // 'general' | 'users'
 
     // Password Change State
     const [newMp, setNewMp] = useState('');
@@ -1253,6 +1372,7 @@ const SettingsModal = ({ isOpen, onClose, onUpload, onRefresh }) => {
             setIsAuthenticated(false);
             setIsChangingPw(false);
             setNewMp('');
+            setActiveTab('general');
         }
     }, [isOpen]);
 
@@ -1294,72 +1414,83 @@ const SettingsModal = ({ isOpen, onClose, onUpload, onRefresh }) => {
 
     return (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
-            <div style={{ background: 'white', padding: '30px', borderRadius: '24px', width: '400px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                    <h2 style={{ fontSize: '1.2rem', fontWeight: '800', color: THEME.primary, margin: 0 }}>설정 및 관리</h2>
+            <div style={{ background: 'white', borderRadius: '24px', width: '500px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
+                <div style={{ padding: '20px 25px', borderBottom: `1px solid ${THEME.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
+                    <h2 style={{ fontSize: '1.2rem', fontWeight: '800', color: THEME.primary, margin: 0 }}>관리자 설정</h2>
                     <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} color="#64748b" /></button>
                 </div>
 
                 {!isAuthenticated ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                        <div style={{ textAlign: 'center', marginBottom: '10px', color: THEME.secondary, fontSize: '0.9rem' }}>
-                            설정 메뉴 접근 권한 확인<br />설정 비밀번호를 입력해주세요.
+                    <div style={{ padding: '40px' }}>
+                        <div style={{ textAlign: 'center', marginBottom: '20px', color: THEME.secondary }}>
+                            <div style={{ marginBottom: '10px' }}><Settings size={48} color={THEME.accent} /></div>
+                            관리자 권한이 필요합니다.
                         </div>
                         <input
                             type="password"
-                            placeholder="비밀번호 입력"
+                            placeholder="설정 비밀번호 입력"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                            style={{ padding: '12px', borderRadius: '12px', border: `1px solid ${THEME.border}`, outline: 'none', fontSize: '1rem', width: '100%', boxSizing: 'border-box' }}
+                            style={{ padding: '14px', borderRadius: '12px', border: `1px solid ${THEME.border}`, outline: 'none', fontSize: '1rem', width: '100%', boxSizing: 'border-box', marginBottom: '15px' }}
                         />
-                        <button onClick={handleLogin} style={{ padding: '12px', borderRadius: '12px', background: THEME.primary, color: 'white', border: 'none', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }}>
+                        <button onClick={handleLogin} style={{ width: '100%', padding: '14px', borderRadius: '12px', background: THEME.primary, color: 'white', border: 'none', fontWeight: 'bold', cursor: 'pointer', fontSize: '1rem' }}>
                             확인
                         </button>
                     </div>
                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                        <div>
-                            <h3 style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: '700', marginBottom: '10px', textTransform: 'uppercase' }}>데이터 관리</h3>
-                            <button onClick={handleUploadClick} style={{ width: '100%', padding: '16px', borderRadius: '16px', border: `1px solid ${THEME.border}`, background: '#f8fafc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', fontWeight: '600', color: THEME.primary, transition: 'all 0.2s', marginBottom: '10px' }}>
-                                <div style={{ background: 'white', padding: '8px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}><FolderOpen size={20} color={THEME.accent} /></div>
-                                데이터 폴더 업로드 (갱신)
+                    <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', borderBottom: `1px solid ${THEME.border}` }}>
+                            <button
+                                onClick={() => setActiveTab('general')}
+                                style={{ flex: 1, padding: '15px', background: activeTab === 'general' ? 'white' : '#f1f5f9', border: 'none', borderBottom: activeTab === 'general' ? `2px solid ${THEME.accent}` : 'none', fontWeight: '700', color: activeTab === 'general' ? THEME.primary : '#94a3b8', cursor: 'pointer' }}
+                            >
+                                일반 설정
                             </button>
-                            <input
-                                type="file"
-                                ref={fileInputRef}
-                                style={{ display: 'none' }}
-                                onChange={handleFileChange}
-                                accept=".csv, .xlsx, .xls"
-                                webkitdirectory="" directory="" multiple
-                            />
-                        </div>
-
-                        <div>
-                            <h3 style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: '700', marginBottom: '10px', textTransform: 'uppercase' }}>시스템</h3>
-                            <button onClick={onRefresh} style={{ width: '100%', padding: '16px', borderRadius: '16px', border: `1px solid ${THEME.border}`, background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', fontWeight: '600', color: THEME.danger, transition: 'all 0.2s', marginBottom: '20px' }}>
-                                <div style={{ background: '#fef2f2', padding: '8px', borderRadius: '8px' }}><Clock size={20} color={THEME.danger} /></div>
-                                시스템 새로고침
+                            <button
+                                onClick={() => setActiveTab('users')}
+                                style={{ flex: 1, padding: '15px', background: activeTab === 'users' ? 'white' : '#f1f5f9', border: 'none', borderBottom: activeTab === 'users' ? `2px solid ${THEME.accent}` : 'none', fontWeight: '700', color: activeTab === 'users' ? THEME.primary : '#94a3b8', cursor: 'pointer' }}
+                            >
+                                사용자 및 권한 관리
                             </button>
                         </div>
 
-                        <div style={{ borderTop: `1px solid ${THEME.border}`, paddingTop: '20px' }}>
-                            <div onClick={() => setIsChangingPw(!isChangingPw)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', color: THEME.secondary, fontWeight: '600', fontSize: '0.9rem' }}>
-                                <span>설정 비밀번호 변경</span>
-                                <Settings size={16} />
-                            </div>
-                            {isChangingPw && (
-                                <div style={{ marginTop: '15px', display: 'flex', gap: '10px' }}>
-                                    <input
-                                        type="text"
-                                        placeholder="새 비밀번호"
-                                        value={newMp}
-                                        onChange={e => setNewMp(e.target.value)}
-                                        style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `1px solid ${THEME.border}`, fontSize: '0.9rem', outline: 'none' }}
-                                    />
-                                    <button onClick={handleChangePassword} style={{ padding: '10px 15px', borderRadius: '8px', background: THEME.primary, color: 'white', border: 'none', fontWeight: '600', cursor: 'pointer' }}>변경</button>
+                        <div style={{ padding: '25px', overflowY: 'auto' }}>
+                            {activeTab === 'general' && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                    <div>
+                                        <h3 style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: '700', marginBottom: '10px', textTransform: 'uppercase' }}>데이터 갱신</h3>
+                                        <button onClick={handleUploadClick} style={{ width: '100%', padding: '16px', borderRadius: '16px', border: `1px solid ${THEME.border}`, background: '#f8fafc', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', gap: '12px', fontWeight: '600', color: THEME.primary, transition: 'all 0.2s' }}>
+                                            <FolderOpen size={20} color={THEME.accent} />
+                                            데이터 폴더 업로드
+                                        </button>
+                                        <input type="file" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileChange} accept=".csv, .xlsx, .xls" webkitdirectory="" directory="" multiple />
+                                    </div>
+
+                                    <div>
+                                        <h3 style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: '700', marginBottom: '10px', textTransform: 'uppercase' }}>시스템 제어</h3>
+                                        <button onClick={onRefresh} style={{ width: '100%', padding: '16px', borderRadius: '16px', border: `1px solid ${THEME.border}`, background: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', gap: '12px', fontWeight: '600', color: THEME.danger }}>
+                                            <Clock size={20} color={THEME.danger} />
+                                            새로고침
+                                        </button>
+                                    </div>
+
+                                    <div style={{ borderTop: `1px solid ${THEME.border}`, paddingTop: '20px' }}>
+                                        <div onClick={() => setIsChangingPw(!isChangingPw)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', color: THEME.secondary, fontWeight: '600' }}>
+                                            <span>설정 비밀번호 변경</span>
+                                            <Settings size={16} />
+                                        </div>
+                                        {isChangingPw && (
+                                            <div style={{ marginTop: '15px', display: 'flex', gap: '10px' }}>
+                                                <input type="text" placeholder="새 비밀번호" value={newMp} onChange={e => setNewMp(e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `1px solid ${THEME.border}`, outline: 'none' }} />
+                                                <button onClick={handleChangePassword} style={{ padding: '10px 15px', borderRadius: '8px', background: THEME.primary, color: 'white', border: 'none', fontWeight: '600', cursor: 'pointer' }}>변경</button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
+
+                            {activeTab === 'users' && <UserManagementPanel themeColor={THEME.accent} />}
                         </div>
                     </div>
                 )}

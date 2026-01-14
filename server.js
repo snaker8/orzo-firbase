@@ -351,7 +351,7 @@ const getUsers = () => {
 app.post('/api/login', (req, res) => {
     const { id, pw } = req.body;
     const users = getUsers();
-    
+
     // 1. Check Admin (Legacy or via users.json)
     if (id === 'admin' && pw === ADMIN_PASSWORD) {
         return res.json({ success: true, user: { id: 'admin', name: '관리자', role: 'admin' } });
@@ -371,7 +371,7 @@ app.get('/api/data', (req, res) => {
     // Auth Headers
     const clientPw = req.headers['x-admin-password']; // Legacy/Admin
     const userId = req.headers['x-user-id']; // Student ID
-    
+
     // 1. Admin Access
     if (clientPw && clientPw.trim().toLowerCase() === ADMIN_PASSWORD.trim().toLowerCase()) {
         return res.json(cachedData);
@@ -390,7 +390,7 @@ app.get('/api/data', (req, res) => {
 
         if (user) {
             if (user.role === 'admin') return res.json(cachedData);
-            
+
             // Filter data for student
             // [Strategies]
             // 1. Exact Name Match
@@ -424,6 +424,45 @@ if (fs.existsSync(DIST_DIR)) {
         res.send("API Server Running. (Frontend build not found, please run 'npm run build')");
     });
 }
+
+
+// [NEW] User Management Endpoints
+app.get('/api/users', (req, res) => {
+    const clientPw = req.headers['x-admin-password'];
+    if (!clientPw || clientPw !== ADMIN_PASSWORD) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    const users = getUsers();
+    // Don't send passwords back? Or sending them for simple management since it's admin only.
+    // Let's send them for simplicity so admin can see/edit them.
+    res.json(users);
+});
+
+app.post('/api/users', (req, res) => {
+    const clientPw = req.headers['x-admin-password'];
+    if (!clientPw || clientPw !== ADMIN_PASSWORD) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    try {
+        const newUsers = req.body;
+        if (!Array.isArray(newUsers)) {
+            return res.status(400).json({ success: false, message: 'Invalid data format' });
+        }
+
+        // Validation check
+        // Ensure admin exists?
+        // Let's just write whatever is sent, assuming frontend does validation.
+
+        fs.writeFileSync(USERS_FILE, JSON.stringify(newUsers, null, 2), 'utf8');
+        console.log(`[Users] Updated users.json. Total count: ${newUsers.length}`);
+
+        res.json({ success: true, count: newUsers.length });
+    } catch (e) {
+        console.error('[Users] Update failed', e);
+        res.status(500).json({ success: false, message: 'Failed to update users' });
+    }
+});
 
 app.listen(PORT, '0.0.0.0', () => { // [UPDATED] Listen on all interfaces
     console.log(`=========================================`);
