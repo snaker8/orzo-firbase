@@ -272,10 +272,13 @@ const loadDataAsync = async () => {
                     const folderPath = path.dirname(relativePath);
 
                     // Add metadata
+                    const nameFromFilename = fileName.split('_')[0];
                     const tagged = data.map(row => ({
                         ...row,
                         sourceFile: fileName,
-                        folderPath: folderPath
+                        folderPath: folderPath,
+                        // [FIX] Ensure name exists (from file content OR filename)
+                        name: row.이름 || row.Name || row.학생 || row.성명 || row.name || nameFromFilename
                     }));
 
                     newData.push(...tagged);
