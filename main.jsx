@@ -58,7 +58,8 @@ window.onerror = function (msg, url, line, col, error) {
 };
 
 // Debug Alert
-alert("대시보드 시작중... (Main.jsx)");
+// Debug Alert Removed
+// alert("대시보드 시작중... (Main.jsx)");
 
 // [SECURITY] 보안 스크립트: 우클릭, 복사, 개발자도구 차단
 const SecurityGuard = ({ children }) => {
