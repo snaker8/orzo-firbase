@@ -953,7 +953,7 @@ const ReportModal = ({ selectedStudent, records, onClose, initialAction }) => {
 };
 
 // [NEW] Student Detail View Component (Teacher System View)
-const StudentDetailView = ({ student, onClose, onOpenReport, isMobile }) => {
+const StudentDetailView = ({ student, onClose, onOpenReport, isMobile, showReportButton = true }) => {
     const [selectedCourse, setSelectedCourse] = useState('전체');
     const [startDate, setStartDate] = useState(() => {
         const d = new Date();
@@ -996,22 +996,46 @@ const StudentDetailView = ({ student, onClose, onOpenReport, isMobile }) => {
     return (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100dvh', background: '#f8fafc', zIndex: 1000, display: 'flex', flexDirection: 'column' }}>
             {/* Header */}
-            <div style={{ height: '70px', padding: '0 30px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${THEME.border}`, background: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.03)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                    <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '8px', borderRadius: '8px', '&:hover': { background: '#f1f5f9' } }}><ChevronLeft size={24} color={THEME.primary} /></button>
-                    <div>
+            {/* Header - Mobile Stack vs Desktop Row */}
+            <div style={{
+                minHeight: '70px',
+                padding: isMobile ? '20px 25px' : '0 30px',
+                display: 'flex',
+                flexDirection: isMobile ? 'column' : 'row',
+                alignItems: isMobile ? 'flex-start' : 'center',
+                justifyContent: 'space-between',
+                borderBottom: `1px solid ${THEME.border}`,
+                background: 'white',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
+                gap: isMobile ? '15px' : '0'
+            }}>
+                <div style={{ display: 'flex', alignItems: isMobile ? 'flex-start' : 'center', gap: '15px', width: '100%' }}>
+                    <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '8px', borderRadius: '8px', marginLeft: '-8px', '&:hover': { background: '#f1f5f9' } }}><ChevronLeft size={24} color={THEME.primary} /></button>
+                    <div style={{ flex: 1 }}>
                         <div style={{ fontSize: '0.75rem', color: THEME.accent, fontWeight: '700', marginBottom: '4px' }}>과사람 의대관 프리미엄 수학 전문 학원</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <h1 style={{ fontSize: '1.4rem', fontWeight: '800', margin: 0, color: THEME.primary }}>{student.name}</h1>
-                            <span style={{ fontSize: '0.85rem', color: THEME.secondary, background: '#f1f5f9', padding: '4px 8px', borderRadius: '6px' }}>{student.className}</span>
-                        </div>
+                        {isMobile ? (
+                            // Mobile Header Stack
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                <span style={{ fontSize: '0.85rem', color: THEME.secondary, background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px', alignSelf: 'flex-start', marginBottom: '6px' }}>{student.className}</span>
+                                <h1 style={{ fontSize: '1.6rem', fontWeight: '800', margin: 0, color: THEME.primary, lineHeight: '1.2', wordBreak: 'keep-all' }}>{student.name}</h1>
+                            </div>
+                        ) : (
+                            // Desktop Header Row
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <h1 style={{ fontSize: '1.4rem', fontWeight: '800', margin: 0, color: THEME.primary }}>{student.name}</h1>
+                                <span style={{ fontSize: '0.85rem', color: THEME.secondary, background: '#f1f5f9', padding: '4px 8px', borderRadius: '6px' }}>{student.className}</span>
+                            </div>
+                        )}
                     </div>
                 </div>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                    <button onClick={() => onOpenReport(filteredRecords)} style={{ padding: '10px 16px', background: THEME.accent, color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 2px 4px rgba(79, 70, 229, 0.2)' }}>
-                        <Printer size={18} /> 학부모 리포트 보기
-                    </button>
-                </div>
+                {/* Actions */}
+                {showReportButton && (
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', width: isMobile ? '100%' : 'auto', justifyContent: isMobile ? 'flex-end' : 'flex-start' }}>
+                        <button onClick={() => onOpenReport(filteredRecords)} style={{ padding: '10px 16px', background: THEME.accent, color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 2px 4px rgba(79, 70, 229, 0.2)', width: isMobile ? '100%' : 'auto', justifyContent: 'center' }}>
+                            <Printer size={18} /> {isMobile ? '리포트 보기' : '학부모 리포트 보기'}
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Course Filter Tabs (Fixed Area) */}
@@ -1133,44 +1157,72 @@ const StudentDetailView = ({ student, onClose, onOpenReport, isMobile }) => {
                     {/* Right Panel: Data Table */}
                     <div style={{ flex: 1, width: isMobile ? '100%' : 'auto', background: 'white', borderRadius: '16px', border: `1px solid ${THEME.border}`, display: 'flex', flexDirection: 'column', overflow: isMobile ? 'visible' : 'hidden', boxShadow: '0 4px 6px -2px rgba(0,0,0,0.03)', height: isMobile ? 'auto' : '100%', minHeight: isMobile ? '0' : '400px' }}>
                         {isMobile ? (
-                            // [MOBILE VIEW] Parent Report Style
-                            <div style={{ padding: '0' }}>
-                                <div style={{ padding: '20px', borderBottom: `2px solid ${THEME.primary}`, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            // [MOBILE VIEW] Card List Layout (No Horizontal Scroll)
+                            <div style={{ padding: '5px' }}>
+                                <div style={{ padding: '0 0 20px 0', borderBottom: `2px solid ${THEME.primary}`, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' }}>
                                     <div style={{ width: '4px', height: '24px', background: THEME.primary }}></div>
                                     <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '800', color: THEME.primary }}>최근 학습 수행 상세</h3>
                                 </div>
-                                <div style={{ overflowX: 'auto' }}>
-                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', minWidth: '500px' }}>
-                                        <thead style={{ background: '#f8fafc', borderBottom: `1px solid ${THEME.primary}`, borderTop: `1px solid ${THEME.primary}` }}>
-                                            <tr style={{ height: '50px' }}>
-                                                <th style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: '#1e293b' }}>학습일시</th>
-                                                <th style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: '#1e293b' }}>과목/단계</th>
-                                                <th style={{ padding: '10px', textAlign: 'left', fontWeight: '700', color: '#1e293b' }}>학습 내용</th>
-                                                <th style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: '#1e293b' }}>점수</th>
-                                                <th style={{ padding: '10px', textAlign: 'center', fontWeight: '700', color: '#1e293b' }}>소요시간</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {filteredRecords.map((record, idx) => (
-                                                <tr key={idx} style={{ borderBottom: `1px solid ${THEME.border}` }}>
-                                                    <td style={{ padding: '15px 10px', textAlign: 'center', color: '#64748b' }}>{record.dateStr}</td>
-                                                    <td style={{ padding: '15px 10px', textAlign: 'center', fontWeight: '600', color: '#334155' }}>{record.course}</td>
-                                                    <td style={{ padding: '15px 10px', textAlign: 'left', fontWeight: '600', color: '#1e293b' }}>{record.title}</td>
-                                                    <td style={{ padding: '15px 10px', textAlign: 'center' }}>
-                                                        <span style={{
-                                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%',
-                                                            border: `1.5px solid ${record.score >= 90 ? THEME.primary : '#94a3b8'}`,
-                                                            color: record.score >= 90 ? THEME.primary : '#1e293b', fontWeight: '800', fontSize: '1rem'
-                                                        }}>{record.score}</span>
-                                                    </td>
-                                                    <td style={{ padding: '15px 10px', textAlign: 'center', color: '#64748b' }}>{record.solveTime}</td>
-                                                </tr>
-                                            ))}
-                                            {filteredRecords.length === 0 && (
-                                                <tr><td colSpan="5" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>데이터가 없습니다.</td></tr>
-                                            )}
-                                        </tbody>
-                                    </table>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                    {filteredRecords.map((record, idx) => {
+                                        const style = getCourseBadgeStyle(record.course);
+                                        const isCompleted = record.score !== null && record.score !== undefined && record.score >= 0;
+                                        return (
+                                            <div key={idx} style={{
+                                                background: 'white',
+                                                borderRadius: '16px',
+                                                padding: '20px',
+                                                boxShadow: '0 4px 15px rgba(0,0,0,0.05)',
+                                                border: `1px solid ${THEME.border}`,
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: '12px'
+                                            }}>
+                                                {/* Card Header: Date & Badge */}
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <span style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: '600' }}>{record.dateStr}</span>
+                                                    <span style={{ fontSize: '0.75rem', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', background: style.bg, color: style.text, border: `1px solid ${style.border}` }}>
+                                                        {record.course}
+                                                    </span>
+                                                </div>
+
+                                                {/* Card Body: Title */}
+                                                <div style={{ fontSize: '1.05rem', fontWeight: '700', color: '#1e293b', lineHeight: '1.5', wordBreak: 'keep-all' }}>
+                                                    {record.title}
+                                                </div>
+
+                                                {/* Divider */}
+                                                <div style={{ height: '1px', background: '#f1f5f9', width: '100%' }}></div>
+
+                                                {/* Card Footer: Stats */}
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                        {/* Score Circle */}
+                                                        <div style={{
+                                                            width: '40px', height: '40px', borderRadius: '50%',
+                                                            background: record.score >= 90 ? '#0f172a' : 'white',
+                                                            color: record.score >= 90 ? 'white' : '#0f172a',
+                                                            border: '2px solid #0f172a',
+                                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                            fontWeight: '800', fontSize: '0.95rem'
+                                                        }}>
+                                                            {record.score}
+                                                        </div>
+                                                        <span style={{ fontSize: '0.8rem', fontWeight: '700', color: isCompleted ? '#059669' : '#ea580c' }}>
+                                                            {isCompleted ? '완료' : '학습중'}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ textAlign: 'right', display: 'flex', gap: '12px', fontSize: '0.85rem', color: '#64748b' }}>
+                                                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Timer size={14} /> {record.solveTime || '-'}</span>
+                                                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><TrendingUp size={14} /> {record.reviewTime || '-'}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {filteredRecords.length === 0 && (
+                                        <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>데이터가 없습니다.</div>
+                                    )}
                                 </div>
                             </div>
                         ) : (
@@ -2403,6 +2455,7 @@ const Dashboard = ({ data }) => {
                             )}
 
                             {/* Main View - Reuse StudentDetailView which has great mobile support */}
+                            {/* Main View - Reuse StudentDetailView which has great mobile support */}
                             <StudentDetailView
                                 student={{
                                     name: user.name,
@@ -2425,6 +2478,7 @@ const Dashboard = ({ data }) => {
                                     setShowReport(true);
                                 }}
                                 isMobile={window.innerWidth <= 768}
+                                showReportButton={false} // [FIX] Hide report button for students
                             />
 
                             {/* Report Modal */}
