@@ -595,7 +595,8 @@ const RealTimeView = ({ processedData, onClose, authPassword }) => {
                         </div>
 
                         {/* Mask to hide Spline Logo (Bottom Right) */}
-                        <div style={{ position: 'absolute', bottom: '10px', right: '10px', width: '200px', height: '60px', background: 'black', zIndex: 50, pointerEvents: 'none' }}></div>
+                        {/* Mask to hide Spline Logo (Bottom Right) */}
+                        <div style={{ position: 'absolute', bottom: '0', right: '0', width: '120px', height: '40px', background: '#000000', zIndex: 50, pointerEvents: 'none' }}></div>
                     </div>
                 )}
 
@@ -1039,8 +1040,18 @@ const StudentDetailView = ({ student, onClose, onOpenReport, isMobile, showRepor
             </div>
 
             {/* Course Filter Tabs (Fixed Area) */}
-            <div style={{ padding: '15px 30px', background: '#f8fafc', borderBottom: `1px solid ${THEME.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 5 }}>
-                <div style={{ display: 'flex', gap: '10px', overflowX: 'auto' }}>
+            <div style={{
+                padding: '15px 30px',
+                background: '#f8fafc',
+                borderBottom: `1px solid ${THEME.border}`,
+                display: 'flex',
+                flexDirection: isMobile ? 'column' : 'row',
+                alignItems: isMobile ? 'flex-start' : 'center',
+                justifyContent: 'space-between',
+                zIndex: 5,
+                gap: isMobile ? '12px' : '0'
+            }}>
+                <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', width: isMobile ? '100%' : 'auto', paddingBottom: isMobile ? '5px' : '0' }}>
                     {courses.map(course => (
                         <button
                             key={course}
@@ -1054,39 +1065,49 @@ const StudentDetailView = ({ student, onClose, onOpenReport, isMobile, showRepor
                                 fontWeight: '600',
                                 cursor: 'pointer',
                                 whiteSpace: 'nowrap',
-                                transition: 'all 0.2s'
+                                transition: 'all 0.2s',
+                                flexShrink: 0 // Prevent shrinking on mobile
                             }}
                         >
                             {course}
                         </button>
                     ))}
                 </div>
-                <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
-                    {/* [NEW] Search Input */}
-                    <div style={{ position: 'relative', marginRight: '10px' }}>
-                        <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                        <input
-                            type="text"
-                            placeholder="학습 내용 검색..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            style={{
-                                padding: '6px 10px 6px 30px',
-                                borderRadius: '8px',
-                                border: '1px solid #e2e8f0',
-                                fontSize: '0.85rem',
-                                color: '#334155',
-                                width: '180px',
-                                outline: 'none'
-                            }}
-                        />
-                    </div>
 
-                    <div style={{ display: 'flex', gap: '5px', background: 'white', padding: '6px 10px', borderRadius: '8px', border: '1px solid #e2e8f0', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.8rem', color: '#94a3b8', marginRight: '5px', fontWeight: '600' }}>기간 조회</span>
-                        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ border: '1px solid #e2e8f0', borderRadius: '4px', padding: '2px 5px', background: 'transparent', fontSize: '0.8rem', color: '#64748b' }} />
-                        <span style={{ color: '#cbd5e1' }}>~</span>
-                        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ border: '1px solid #e2e8f0', borderRadius: '4px', padding: '2px 5px', background: 'transparent', fontSize: '0.8rem', color: '#64748b' }} />
+                {/* Filters Row: Search (Desktop only) & Date */}
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', width: isMobile ? '100%' : 'auto' }}>
+
+                    {/* [NEW] Search Input - Hidden on Mobile */}
+                    {!isMobile && (
+                        <div style={{ position: 'relative', marginRight: '10px' }}>
+                            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                            <input
+                                type="text"
+                                placeholder="학습 내용 검색..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                style={{
+                                    padding: '6px 10px 6px 30px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #e2e8f0',
+                                    fontSize: '0.85rem',
+                                    color: '#334155',
+                                    width: '180px',
+                                    outline: 'none'
+                                }}
+                            />
+                        </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '5px', background: 'white', padding: '6px 10px', borderRadius: '8px', border: '1px solid #e2e8f0', alignItems: 'center', flex: isMobile ? 1 : 'none', justifyContent: isMobile ? 'space-between' : 'flex-start' }}>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.8rem', color: '#94a3b8', marginRight: '5px', fontWeight: '600' }}>기간</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ border: 'none', background: 'transparent', fontSize: '0.85rem', color: '#64748b', fontFamily: 'inherit' }} />
+                            <span style={{ color: '#cbd5e1' }}>~</span>
+                            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ border: 'none', background: 'transparent', fontSize: '0.85rem', color: '#64748b', fontFamily: 'inherit' }} />
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1194,27 +1215,41 @@ const StudentDetailView = ({ student, onClose, onOpenReport, isMobile, showRepor
                                                 {/* Divider */}
                                                 <div style={{ height: '1px', background: '#f1f5f9', width: '100%' }}></div>
 
-                                                {/* Card Footer: Stats */}
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                        {/* Score Circle */}
-                                                        <div style={{
-                                                            width: '40px', height: '40px', borderRadius: '50%',
-                                                            background: record.score >= 90 ? '#0f172a' : 'white',
-                                                            color: record.score >= 90 ? 'white' : '#0f172a',
-                                                            border: '2px solid #0f172a',
-                                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                            fontWeight: '800', fontSize: '0.95rem'
-                                                        }}>
-                                                            {record.score}
+                                                {/* Card Footer: Stats (Explicit Labels) */}
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                            {/* Score Circle */}
+                                                            <div style={{
+                                                                width: '44px', height: '44px', borderRadius: '50%',
+                                                                background: record.score >= 90 ? '#0f172a' : 'white',
+                                                                color: record.score >= 90 ? 'white' : '#0f172a',
+                                                                border: '2px solid #0f172a',
+                                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                fontWeight: '800', fontSize: '1.1rem'
+                                                            }}>
+                                                                {record.score}
+                                                            </div>
+                                                            <span style={{ fontSize: '0.85rem', fontWeight: '700', color: isCompleted ? '#059669' : '#ea580c' }}>
+                                                                {isCompleted ? '채점완료' : '학습중'}
+                                                            </span>
                                                         </div>
-                                                        <span style={{ fontSize: '0.8rem', fontWeight: '700', color: isCompleted ? '#059669' : '#ea580c' }}>
-                                                            {isCompleted ? '완료' : '학습중'}
-                                                        </span>
                                                     </div>
-                                                    <div style={{ textAlign: 'right', display: 'flex', gap: '12px', fontSize: '0.85rem', color: '#64748b' }}>
-                                                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Timer size={14} /> {record.solveTime || '-'}</span>
-                                                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><TrendingUp size={14} /> {record.reviewTime || '-'}</span>
+
+                                                    <div style={{ display: 'flex', gap: '10px', background: '#f8fafc', padding: '12px', borderRadius: '8px', justifyContent: 'space-around' }}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                            <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                <Timer size={12} /> 풀이 시간
+                                                            </div>
+                                                            <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#1e293b' }}>{record.solveTime || '-'}</div>
+                                                        </div>
+                                                        <div style={{ width: '1px', background: '#e2e8f0' }}></div>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                            <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                                <TrendingUp size={12} /> 복습 시간
+                                                            </div>
+                                                            <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#1e293b' }}>{record.reviewTime || '-'}</div>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>

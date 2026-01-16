@@ -38,7 +38,7 @@ const SplashScreen = ({ onDismiss }) => {
             ></iframe>
 
             {/* Mask to hide Spline Logo (Bottom Right) */}
-            <div style={{ position: 'absolute', bottom: '0', right: '0', width: '120px', height: '50px', background: '#0f172a', zIndex: 100000, pointerEvents: 'none' }}></div>
+            <div style={{ position: 'absolute', bottom: '0', right: '0', width: '120px', height: '40px', background: '#000000', zIndex: 100000, pointerEvents: 'none' }}></div>
 
             {/* Content Overlay */}
             <div style={{
