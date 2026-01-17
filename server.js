@@ -337,12 +337,12 @@ app.post('/api/login', (req, res) => {
     const { id, pw } = req.body;
     const users = getUsers();
 
-    // 1. Check Admin (Legacy or via users.json)
+    // 1. Check Admin (Legacy)
     if (id === 'admin' && pw === ADMIN_PASSWORD) {
         return res.json({ success: true, user: { id: 'admin', name: '관리자', role: 'admin' } });
     }
 
-    // 2. Check Users
+    // 2. Check Users (including Multi-Admins)
     const user = users.find(u => u.id === id && u.pw === pw);
     if (user) {
         return res.json({ success: true, user: { id: user.id, name: user.name, role: user.role } });
@@ -355,43 +355,40 @@ app.post('/api/login', (req, res) => {
 app.get('/api/data', (req, res) => {
     // Auth Headers
     const clientPw = req.headers['x-admin-password']; // Legacy/Admin
-
-    // [FIX] Decode headers to support Korean/Special characters
     const userId = req.headers['x-user-id'] ? decodeURIComponent(req.headers['x-user-id']) : null;
     const userPw = req.headers['x-user-pw'] ? decodeURIComponent(req.headers['x-user-pw']) : null;
 
-    // 1. Admin Access
+    // 1. Global Admin Access (Legacy Password)
     if (clientPw && clientPw.trim().toLowerCase() === ADMIN_PASSWORD.trim().toLowerCase()) {
         return res.json(cachedData);
     }
-
-    // Check fallback auth (Query/Body) for Admin
     const fallbackPw = req.query.pw || req.body.pw;
     if (fallbackPw && fallbackPw.trim().toLowerCase() === ADMIN_PASSWORD.trim().toLowerCase()) {
         return res.json(cachedData);
     }
 
-    // 2. Student Access
-    const users = getUsers(); // [FIX] Load users
-    const user = users.find(u => u.id === userId && u.pw === userPw);
+    // 2. User Access (Student OR Multi-Admin)
+    if (userId && userPw) {
+        const users = getUsers();
+        const user = users.find(u => u.id === userId && u.pw === userPw);
 
-    if (user) {
-        if (user.role === 'admin') return res.json(cachedData);
+        if (user) {
+            // [NEW] Multi-Admin Support: Any user with role 'admin' sees everything
+            if (user.role === 'admin') {
+                return res.json(cachedData);
+            }
 
-        // Filter data for student
-        // [Strategies]
-        // 1. Exact Name Match (with Unicode Normalization)
-        const targetName = user.name.trim().normalize('NFC');
-        console.log(`[Auth] Filtering for student: '${targetName}'`);
+            // Student Access: Filter Data
+            const targetName = user.name.trim().normalize('NFC');
+            console.log(`[Auth] Filtering for student: '${targetName}'`);
 
-        const studentData = cachedData.filter(item => {
-            // Ensure item.name exists 
-            if (!item.name) return false;
-            const itemName = String(item.name).trim().normalize('NFC');
-            return itemName === targetName;
-        });
-        console.log(`[Auth] Serving ${studentData.length} records for student: ${user.name}`);
-        return res.json(studentData);
+            const studentData = cachedData.filter(item => {
+                if (!item.name) return false;
+                const itemName = String(item.name).trim().normalize('NFC');
+                return itemName === targetName;
+            });
+            return res.json(studentData);
+        }
     }
 
     console.warn(`[Auth Failed] Data Access - IP: ${req.ip}`);

@@ -2111,6 +2111,8 @@ const DashboardView = ({ processedData, onSwitchMode, onSimulateLogin, adminPass
 const Dashboard = ({ data }) => {
     // [UI] Splash Screen State
     const [showSplash, setShowSplash] = useState(true);
+    // [PERF] Deferred Rendering State
+    const [isAppLoaded, setIsAppLoaded] = useState(false);
 
     // [AUTH]
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -2347,13 +2349,14 @@ const Dashboard = ({ data }) => {
                 // But wait, if backend sees 'student' header, it filters.
                 // If we are admin simulating, we effectively ARE that student for data purposes.
 
-                if (user.role === 'admin') {
-                    // For admin, use the password (or defaults)
+                if (user.role === 'admin' && user.id === 'admin') {
+                    // Legacy Global Admin
                     headers['x-admin-password'] = authPassword || 'orzoai';
                 } else {
-                    // For student (or simulated student), send ID and PW (we stored them in user object for simplicity, though insecure for real apps)
+                    // [NEW] Unified logic for Student AND Multi-Admin
+                    // Both send ID/PW. Server decides based on role.
                     headers['x-user-id'] = encodeURIComponent(user.id);
-                    headers['x-user-pw'] = encodeURIComponent(user.pw); // Ideally token, but passing PW as per plan
+                    headers['x-user-pw'] = encodeURIComponent(user.pw);
                 }
 
                 // [Special Case] If Admin Simulation, we might be a student role in 'user' state,
@@ -2463,93 +2466,83 @@ const Dashboard = ({ data }) => {
     // For visual consistency, we can block the other views or just overlay.
     // Overlay is safer to ensure data loading happens.
 
+
+    // [PERF] Handle Splash Dismiss
+    const handleSplashDismiss = () => {
+        setShowSplash(false);
+        // Start rendering the heavy app *after* (or just before) splash removal
+        // setTimeout(() => setIsAppLoaded(true), 100); 
+        // We set isAppLoaded(true) immediately? No, we want to START loading when dismissed?
+        // Actually, we want to START loading *after* dismissal to keep 60fps during 3D.
+        setIsAppLoaded(true);
+    };
+
     return (
-        <>
-            {showSplash && <SplashScreen onDismiss={() => setShowSplash(false)} />}
+        {/* Main View - Reuse StudentDetailView which has great mobile support */ }
+        < StudentDetailView
+                                student = {{
+        name: user.name,
+            className: '나의 학습실',
+                records: validData // Already filtered
+    }
+}
+onClose = {() => {
+    if (isAdminSimulation) {
+        handleExitSimulation();
+    } else {
+        if (confirm('로그아웃 하시겠습니까?')) {
+            sessionStorage.removeItem('orzo_user');
+            setIsAuthenticated(false);
+            setUser(null);
+        }
+    }
+}}
+onOpenReport = {(records) => {
+    setReportRecords(records);
+    setShowReport(true);
+}}
+isMobile = { window.innerWidth <= 768 }
+showReportButton = { false} // [FIX] Hide report button for students
+    />
 
-            {/* Main App Content - Only visible/interactive if not splashing, OR if we want background loading, we can keep it */}
-            {/* But since we want to 'Start', maybe we hide it to prevent interaction hooks firing weirdly? */}
-            {/* Actually, pre-loading data is good. So we keep it mounted but maybe hidden or under overlay. */}
-            {/* Since SplashScreen is zIndex 99999, it covers everything. */}
-
-            {!isAuthenticated ? (
-                <LoginOverlay onLogin={handleLogin} />
-            ) : (
-                <>
-                    {/* Check User Role for View Routing */}
-                    {user && user.role === 'student' ? (
-                        <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: '#f8fafc' }}>
-                            {/* Simulation Banner */}
-                            {isAdminSimulation && (
-                                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, background: '#fef3c7', padding: '10px 20px', zIndex: 3000, display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#92400e', fontWeight: 'bold' }}>
-                                    <span>⚠️ 관리자 모니터링 모드 ({user.name} 시점)</span>
-                                    <button onClick={handleExitSimulation} style={{ padding: '6px 12px', background: '#92400e', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}>관리자 복귀 (종료)</button>
-                                </div>
-                            )}
-
-                            {/* Main View - Reuse StudentDetailView which has great mobile support */}
-                            {/* Main View - Reuse StudentDetailView which has great mobile support */}
-                            <StudentDetailView
-                                student={{
-                                    name: user.name,
-                                    className: '나의 학습실',
-                                    records: validData // Already filtered
-                                }}
-                                onClose={() => {
-                                    if (isAdminSimulation) {
-                                        handleExitSimulation();
-                                    } else {
-                                        if (confirm('로그아웃 하시겠습니까?')) {
-                                            sessionStorage.removeItem('orzo_user');
-                                            setIsAuthenticated(false);
-                                            setUser(null);
-                                        }
-                                    }
-                                }}
-                                onOpenReport={(records) => {
-                                    setReportRecords(records);
-                                    setShowReport(true);
-                                }}
-                                isMobile={window.innerWidth <= 768}
-                                showReportButton={false} // [FIX] Hide report button for students
-                            />
-
-                            {/* Report Modal */}
-                            {showReport && (
-                                <ReportModal
-                                    selectedStudent={{ name: user.name, className: '나의 학습실', records: validData }}
-                                    records={reportRecords}
-                                    onClose={() => setShowReport(false)}
-                                />
-                            )}
-                        </div>
+    {/* Report Modal */ }
+{
+    showReport && (
+        <ReportModal
+            selectedStudent={{ name: user.name, className: '나의 학습실', records: validData }}
+            records={reportRecords}
+            onClose={() => setShowReport(false)}
+        />
+    )
+}
+                        </div >
                     ) : (
-                        // Admin / Dashboard View
-                        validData.length === 0 ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#f8fafc' }} onDrop={onDrop} onDragOver={onDragOver}>
-                                <div style={{ background: 'white', padding: '3rem', borderRadius: '20px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', maxWidth: '600px', textAlign: 'center', border: `2px dashed #e2e8f0` }}>
-                                    <div style={{ marginBottom: '1.5rem', color: '#4f46e5' }}><FileText size={48} /></div>
-                                    <h2 style={{ fontSize: '1.75rem', fontWeight: '800', marginBottom: '1rem', color: '#1e293b' }}>학습 데이터 대기 중...</h2>
-                                    <p style={{ marginBottom: '2rem', color: '#64748b', lineHeight: '1.6' }}><b>'data'</b> 폴더에 엑셀/CSV 파일을 넣어주세요.<br />자동으로 감지하여 화면이 갱신됩니다.</p>
-                                    <div style={{ padding: '15px', background: '#f1f5f9', borderRadius: '8px', fontSize: '0.85rem', color: '#64748b', marginBottom: '20px', fontFamily: 'monospace' }}>[상태] {debugStatus}</div>
+    // Admin / Dashboard View
+    validData.length === 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#f8fafc' }} onDrop={onDrop} onDragOver={onDragOver}>
+            <div style={{ background: 'white', padding: '3rem', borderRadius: '20px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', maxWidth: '600px', textAlign: 'center', border: `2px dashed #e2e8f0` }}>
+                <div style={{ marginBottom: '1.5rem', color: '#4f46e5' }}><FileText size={48} /></div>
+                <h2 style={{ fontSize: '1.75rem', fontWeight: '800', marginBottom: '1rem', color: '#1e293b' }}>학습 데이터 대기 중...</h2>
+                <p style={{ marginBottom: '2rem', color: '#64748b', lineHeight: '1.6' }}><b>'data'</b> 폴더에 엑셀/CSV 파일을 넣어주세요.<br />자동으로 감지하여 화면이 갱신됩니다.</p>
+                <div style={{ padding: '15px', background: '#f1f5f9', borderRadius: '8px', fontSize: '0.85rem', color: '#64748b', marginBottom: '20px', fontFamily: 'monospace' }}>[상태] {debugStatus}</div>
 
-                                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                                        <button onClick={handleLoadDemo} style={{ background: 'white', color: '#64748b', border: `1px solid #e2e8f0`, padding: '0.75rem 1.5rem', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' }}>데모 데이터 보기</button>
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                    <button onClick={handleLoadDemo} style={{ background: 'white', color: '#64748b', border: `1px solid #e2e8f0`, padding: '0.75rem 1.5rem', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' }}>데모 데이터 보기</button>
 
-                                        <input type="file" ref={serverFileInputRef} style={{ display: 'none' }} onChange={handleEmptyStateUpload} accept=".csv, .xlsx, .xls" webkitdirectory="" directory="" multiple />
-                                        <button onClick={() => serverFileInputRef.current.click()} style={{ background: '#4f46e5', color: 'white', border: 'none', padding: '0.75rem 1.5rem', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <FolderOpen size={18} /> 폴더 전체 업로드 (PC/서버)
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : (
-                            <>
-                                {mode === 'dashboard' && <DashboardView processedData={validData} onSwitchMode={() => setMode('presentation')} onSimulateLogin={handleSimulateLogin} adminPassword={authPassword} />}
-                                {mode === 'presentation' && <RealTimeView processedData={validData} onClose={() => setMode('dashboard')} authPassword={authPassword} />}
-                            </>
-                        )
-                    )}
+                    <input type="file" ref={serverFileInputRef} style={{ display: 'none' }} onChange={handleEmptyStateUpload} accept=".csv, .xlsx, .xls" webkitdirectory="" directory="" multiple />
+                    <button onClick={() => serverFileInputRef.current.click()} style={{ background: '#4f46e5', color: 'white', border: 'none', padding: '0.75rem 1.5rem', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <FolderOpen size={18} /> 폴더 전체 업로드 (PC/서버)
+                    </button>
+                </div>
+            </div>
+        </div>
+    ) : (
+        <>
+            {mode === 'dashboard' && <DashboardView processedData={validData} onSwitchMode={() => setMode('presentation')} onSimulateLogin={handleSimulateLogin} adminPassword={authPassword} />}
+            {mode === 'presentation' && <RealTimeView processedData={validData} onClose={() => setMode('dashboard')} authPassword={authPassword} />}
+        </>
+    )
+)}
                 </>
             )}
         </>
