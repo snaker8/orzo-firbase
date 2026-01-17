@@ -2470,82 +2470,34 @@ const Dashboard = ({ data }) => {
     // [PERF] Handle Splash Dismiss
     const handleSplashDismiss = () => {
         setShowSplash(false);
-        // Start rendering the heavy app *after* (or just before) splash removal
-        // setTimeout(() => setIsAppLoaded(true), 100); 
-        // We set isAppLoaded(true) immediately? No, we want to START loading when dismissed?
-        // Actually, we want to START loading *after* dismissal to keep 60fps during 3D.
         setIsAppLoaded(true);
     };
 
     return (
-        {/* Main View - Reuse StudentDetailView which has great mobile support */ }
-        < StudentDetailView
-                                student = {{
-        name: user.name,
-            className: '나의 학습실',
-                records: validData // Already filtered
-    }
-}
-onClose = {() => {
-    if (isAdminSimulation) {
-        handleExitSimulation();
-    } else {
-        if (confirm('로그아웃 하시겠습니까?')) {
-            sessionStorage.removeItem('orzo_user');
-            setIsAuthenticated(false);
-            setUser(null);
-        }
-    }
-}}
-onOpenReport = {(records) => {
-    setReportRecords(records);
-    setShowReport(true);
-}}
-isMobile = { window.innerWidth <= 768 }
-showReportButton = { false} // [FIX] Hide report button for students
-    />
-
-    {/* Report Modal */ }
-{
-    showReport && (
-        <ReportModal
-            selectedStudent={{ name: user.name, className: '나의 학습실', records: validData }}
-            records={reportRecords}
-            onClose={() => setShowReport(false)}
-        />
-    )
-}
-                        </div >
-                    ) : (
-    // Admin / Dashboard View
-    validData.length === 0 ? (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#f8fafc' }} onDrop={onDrop} onDragOver={onDragOver}>
-            <div style={{ background: 'white', padding: '3rem', borderRadius: '20px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', maxWidth: '600px', textAlign: 'center', border: `2px dashed #e2e8f0` }}>
-                <div style={{ marginBottom: '1.5rem', color: '#4f46e5' }}><FileText size={48} /></div>
-                <h2 style={{ fontSize: '1.75rem', fontWeight: '800', marginBottom: '1rem', color: '#1e293b' }}>학습 데이터 대기 중...</h2>
-                <p style={{ marginBottom: '2rem', color: '#64748b', lineHeight: '1.6' }}><b>'data'</b> 폴더에 엑셀/CSV 파일을 넣어주세요.<br />자동으로 감지하여 화면이 갱신됩니다.</p>
-                <div style={{ padding: '15px', background: '#f1f5f9', borderRadius: '8px', fontSize: '0.85rem', color: '#64748b', marginBottom: '20px', fontFamily: 'monospace' }}>[상태] {debugStatus}</div>
-
-                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                    <button onClick={handleLoadDemo} style={{ background: 'white', color: '#64748b', border: `1px solid #e2e8f0`, padding: '0.75rem 1.5rem', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' }}>데모 데이터 보기</button>
-
-                    <input type="file" ref={serverFileInputRef} style={{ display: 'none' }} onChange={handleEmptyStateUpload} accept=".csv, .xlsx, .xls" webkitdirectory="" directory="" multiple />
-                    <button onClick={() => serverFileInputRef.current.click()} style={{ background: '#4f46e5', color: 'white', border: 'none', padding: '0.75rem 1.5rem', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <FolderOpen size={18} /> 폴더 전체 업로드 (PC/서버)
-                    </button>
-                </div>
-            </div>
-        </div>
-    ) : (
-        <>
-            {mode === 'dashboard' && <DashboardView processedData={validData} onSwitchMode={() => setMode('presentation')} onSimulateLogin={handleSimulateLogin} adminPassword={authPassword} />}
-            {mode === 'presentation' && <RealTimeView processedData={validData} onClose={() => setMode('dashboard')} authPassword={authPassword} />}
-        </>
-    )
-)}
-                </>
+        <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+            {showSplash && (
+                <SplashScreen onDismiss={handleSplashDismiss} />
             )}
-        </>
+
+            {/* [PERF] Deferred Rendering: Only render Main App when Splash is gone/going */}
+            {(!showSplash || isAppLoaded) && (
+                <div style={{
+                    width: '100%', height: '100%',
+                    opacity: showSplash ? 0 : 1
+                }}>
+                    {!isAuthenticated ? (
+                        <LoginOverlay onLogin={handleLogin} />
+                    ) : (
+                        <DashboardView
+                            processedData={validData} // Optimized Data
+                            onSwitchMode={() => setMode(m => m === 'dashboard' ? 'report' : 'dashboard')}
+                            onSimulateLogin={handleSimulateLogin} // [NEW] Use the handler we defined
+                            adminPassword={authPassword} // Pass for upload check
+                        />
+                    )}
+                </div>
+            )}
+        </div>
     );
 };
 
