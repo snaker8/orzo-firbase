@@ -29,13 +29,23 @@ const SplashScreen = ({ onDismiss }) => {
             }}
         >
             {/* Background Spline 3D */}
-            <iframe
-                src="https://my.spline.design/claritystream-mDXSTu56HgZ7qZtc2R9gBFBc/"
-                frameBorder="0"
-                width="100%"
-                height="100%"
-                style={{ width: '100vw', height: '100vh', border: 'none', pointerEvents: 'none', position: 'absolute', top: 0, left: 0 }}
-            ></iframe>
+            {/* [FIX] Scaled up to hide the bottom-right logo */}
+            <div style={{
+                position: 'absolute',
+                top: '-10%',
+                left: '-10%',
+                width: '120%',
+                height: '120%',
+                pointerEvents: 'none'
+            }}>
+                <iframe
+                    src="https://my.spline.design/claritystream-mDXSTu56HgZ7qZtc2R9gBFBc/"
+                    frameBorder="0"
+                    width="100%"
+                    height="100%"
+                    style={{ width: '100%', height: '100%', border: 'none' }}
+                ></iframe>
+            </div>
 
             {/* Content Overlay */}
             <div style={{
@@ -50,14 +60,15 @@ const SplashScreen = ({ onDismiss }) => {
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                gap: '10px'
+                gap: '10px',
+                padding: '0 20px' // Prevent text touching edges on small screens
             }}>
                 <p style={{
                     margin: 0,
-                    fontSize: '1.2rem',
+                    fontSize: 'clamp(0.7rem, 2.5vw, 1.2rem)', // Responsive Size
                     color: '#94a3b8',
                     fontWeight: '600',
-                    letterSpacing: '4px',
+                    letterSpacing: 'clamp(2px, 1vw, 4px)',
                     textTransform: 'uppercase',
                     fontFamily: "'Montserrat', sans-serif",
                     textShadow: '0 0 20px rgba(148, 163, 184, 0.3)'
@@ -66,7 +77,7 @@ const SplashScreen = ({ onDismiss }) => {
                 </p>
 
                 <h1 style={{
-                    fontSize: '4.5rem',
+                    fontSize: 'clamp(2.5rem, 10vw, 5rem)', // Responsive Size
                     fontWeight: '900',
                     color: 'white',
                     margin: '0',
@@ -75,7 +86,8 @@ const SplashScreen = ({ onDismiss }) => {
                     background: 'linear-gradient(to right, #ffffff, #cbd5e1)',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
-                    lineHeight: 1.2
+                    lineHeight: 1.2,
+                    wordBreak: 'keep-all' // Prevent awkward breaks in Korean
                 }}>
                     과사람 의대관
                 </h1>
@@ -83,14 +95,10 @@ const SplashScreen = ({ onDismiss }) => {
                 <div style={{
                     marginTop: '2rem',
                     padding: '0.8rem 2rem',
-                    // borderRadius: '50px',
-                    // border: '1px solid rgba(255,255,255,0.1)',
-                    // background: 'rgba(255,255,255,0.02)',
-                    // backdropFilter: 'blur(5px)',
                 }}>
                     <p style={{
                         margin: 0,
-                        fontSize: '1rem',
+                        fontSize: 'clamp(0.8rem, 2vw, 1rem)',
                         color: '#64748b',
                         fontWeight: '500',
                         letterSpacing: '1px'
