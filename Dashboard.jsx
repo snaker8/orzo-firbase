@@ -996,8 +996,20 @@ const StudentDetailView = ({ student, onClose, onOpenReport, isMobile, showRepor
         const day = String(d.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
     });
-    const [endDate, setEndDate] = useState('');
-    const [searchQuery, setSearchQuery] = useState(''); // [NEW] Search State
+    const [endDate, setEndDate] = useState(() => {
+        const d = new Date();
+        return d.toISOString().split('T')[0];
+    });
+    const [searchQuery, setSearchQuery] = useState('');
+
+    // [NEW] Quick Date Range Setter
+    const setDateRange = (days) => {
+        const end = new Date();
+        const start = new Date();
+        start.setDate(start.getDate() - days);
+        setStartDate(start.toISOString().split('T')[0]);
+        setEndDate(end.toISOString().split('T')[0]);
+    };
 
     if (!student) return null;
 
@@ -1140,6 +1152,12 @@ const StudentDetailView = ({ student, onClose, onOpenReport, isMobile, showRepor
                             <span style={{ color: '#cbd5e1' }}>~</span>
                             <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ border: 'none', background: 'transparent', fontSize: '0.85rem', color: '#64748b', fontFamily: 'inherit' }} />
                         </div>
+                    </div>
+                    {/* [NEW] Quick Date Filter Buttons */}
+                    <div style={{ display: 'flex', gap: '5px' }}>
+                        <button onClick={() => setDateRange(7)} style={{ padding: '6px 12px', fontSize: '0.8rem', background: 'white', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer', color: '#64748b', fontWeight: '600' }}>1주</button>
+                        <button onClick={() => setDateRange(14)} style={{ padding: '6px 12px', fontSize: '0.8rem', background: 'white', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer', color: '#64748b', fontWeight: '600' }}>2주</button>
+                        <button onClick={() => setDateRange(30)} style={{ padding: '6px 12px', fontSize: '0.8rem', background: 'white', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer', color: '#64748b', fontWeight: '600' }}>1개월</button>
                     </div>
                 </div>
             </div>
