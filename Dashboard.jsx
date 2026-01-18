@@ -1367,26 +1367,32 @@ const UserManagementPanel = ({ themeColor, onSimulateLogin, onClose, adminPasswo
         fetchUsers();
     }, []);
 
+    const [fetchSuccess, setFetchSuccess] = useState(false); // [NEW] Safety Lock
+
+    useEffect(() => {
+        fetchUsers();
+    }, []);
+
     const fetchUsers = async () => {
         setLoading(true);
-        console.log('[Debug] Fetching users...'); // [DEBUG]
+        setFetchSuccess(false); // Reset
+        console.log('[Debug] Fetching users...');
         try {
             const res = await fetch('/api/users?pw=orzoai', {
                 headers: {
-                    'x-admin-password': 'orzoai', // Legacy support
-                    // [NEW] Send User Auth
+                    'x-admin-password': 'orzoai',
                     'x-user-id': user ? encodeURIComponent(user.id) : '',
                     'x-user-pw': user ? encodeURIComponent(user.pw) : ''
                 }
             });
-            console.log('[Debug] Fetch status:', res.status); // [DEBUG]
+            console.log('[Debug] Fetch status:', res.status);
             if (res.ok) {
                 const data = await res.json();
-                console.log('[Debug] Fetched data:', data); // [DEBUG]
+                console.log('[Debug] Fetched data:', data);
 
                 if (Array.isArray(data)) {
                     setUsers(data);
-                    // Alert if empty for immediate visibility
+                    setFetchSuccess(true); // Allow saving
                     if (data.length === 0) alert('[Debug] User list is empty even after fetch!');
                 } else {
                     console.error('[Debug] Data is not an array:', data);
@@ -1419,7 +1425,7 @@ const UserManagementPanel = ({ themeColor, onSimulateLogin, onClose, adminPasswo
                 }
             });
             const data = await res.json();
-            console.log('[Debug] Sync result:', data); // [DEBUG]
+            console.log('[Debug] Sync result:', data);
 
             if (data.success) {
                 if (data.message) alert(data.message);
@@ -1462,6 +1468,10 @@ const UserManagementPanel = ({ themeColor, onSimulateLogin, onClose, adminPasswo
     };
 
     const handleSave = async () => {
+        if (!fetchSuccess) {
+            alert("데이터를 불러오지 못했기 때문에 저장할 수 없습니다. 새로고침 후 다시 시도해주세요.");
+            return;
+        }
         try {
             const res = await fetch('/api/users?pw=orzoai', {
                 method: 'POST',
