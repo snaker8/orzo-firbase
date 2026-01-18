@@ -295,7 +295,7 @@ const LoginOverlay = ({ onLogin, onRegister }) => {
                         type="text"
                         value={id}
                         onChange={(e) => { setId(e.target.value); setError(false); }}
-                        placeholder="아이디 (기본: admin)"
+                        placeholder="아이디"
                         style={{
                             width: '100%', padding: '16px', borderRadius: '12px',
                             border: error ? '2px solid #ef4444' : '1px solid #e2e8f0',
