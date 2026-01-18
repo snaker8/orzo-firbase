@@ -1190,7 +1190,7 @@ const StudentDetailView = ({ student, onClose, onOpenReport, isMobile, showRepor
                                 <LineChart size={16} /> 최근 성적 추이
                             </h3>
                             <ResponsiveContainer width="100%" height="85%">
-                                <AreaChart data={[...filteredRecords].reverse().slice(-5)}>
+                                <AreaChart data={[...filteredRecords].filter(r => !r.title.includes('노트')).reverse().slice(-5)}>
                                     <defs>
                                         <linearGradient id="colorScoreMini" x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="5%" stopColor={THEME.accent} stopOpacity={0.2} />
