@@ -2012,7 +2012,7 @@ const DashboardMobile = ({
 
 
 // 3. DashboardContainer (Formerly DashboardView)
-const DashboardView = ({ processedData, onSwitchMode, onSimulateLogin, adminPassword }) => {
+const DashboardView = ({ processedData, onSwitchMode, onSimulateLogin, adminPassword, user }) => {
     // ---- STATE ----
     const [selectedStudentName, setSelectedStudentName] = useState(null);
     const [selectedFolder, setSelectedFolder] = useState('전체');
@@ -2597,6 +2597,7 @@ const Dashboard = ({ data }) => {
                             onSwitchMode={() => setMode(m => m === 'dashboard' ? 'report' : 'dashboard')}
                             onSimulateLogin={handleSimulateLogin} // [NEW] Use the handler we defined
                             adminPassword={authPassword} // Pass for upload check
+                            user={user} // [FIX] Pass user prop
                         />
                     )}
                 </div>
