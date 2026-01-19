@@ -118,6 +118,76 @@ app.post('/api/upload', upload.array('files'), (req, res) => {
     }
 });
 
+// [NEW] List Files Endpoint
+app.get('/api/files', (req, res) => {
+    // Auth Check
+    const clientPw = req.headers['x-admin-password'] || req.query.pw;
+    if (clientPw !== ADMIN_PASSWORD) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    try {
+        const getAllFiles = (dir, fileList = []) => {
+            if (!fs.existsSync(dir)) return fileList;
+            const files = fs.readdirSync(dir);
+            files.forEach(file => {
+                if (file.startsWith('.') || file === 'users.json') return; // Skip hidden and system files
+                const filePath = path.join(dir, file);
+                const stat = fs.statSync(filePath);
+                if (stat.isDirectory()) {
+                    getAllFiles(filePath, fileList);
+                } else {
+                    fileList.push({
+                        name: file,
+                        path: path.relative(DATA_DIR, filePath).replace(/\\/g, '/'), // Relative to DATA_DIR
+                        size: stat.size,
+                        mtime: stat.mtime
+                    });
+                }
+            });
+            return fileList;
+        };
+
+        const files = getAllFiles(DATA_DIR);
+        res.json({ success: true, files });
+    } catch (e) {
+        console.error('[List Files Error]', e);
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+// [NEW] Delete File/Folder Endpoint
+app.delete('/api/files', (req, res) => {
+    // Auth Check
+    const clientPw = req.headers['x-admin-password'] || req.query.pw || req.body.pw;
+    if (clientPw !== ADMIN_PASSWORD) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const { targetPath } = req.body; // Expects relative path from DATA_DIR
+    if (!targetPath) return res.status(400).json({ success: false, message: 'No path specified' });
+
+    try {
+        // Security: Prevent traversal
+        const safePath = path.normalize(targetPath).replace(/^(\.\.[\/\\])+/, '');
+        const fullPath = path.join(DATA_DIR, safePath);
+
+        if (!fs.existsSync(fullPath)) {
+            return res.status(404).json({ success: false, message: 'File not found' });
+        }
+
+        const stat = fs.statSync(fullPath);
+        if (stat.isDirectory()) {
+            fs.rmSync(fullPath, { recursive: true, force: true });
+        } else {
+            fs.unlinkSync(fullPath);
+        }
+
+        console.log(`[Delete] Deleted: ${fullPath}`);
+        triggerReload(); // Reload data
+        res.json({ success: true, message: 'Deleted successfully' });
+    } catch (e) {
+        console.error('[Delete Error]', e);
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
 // Request Logger
 app.use((req, res, next) => {
     console.log(`[Request] ${req.method} ${req.url}`);

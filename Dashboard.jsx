@@ -1734,6 +1734,12 @@ const SettingsModal = ({ isOpen, onClose, onUpload, onRefresh, onSimulateLogin, 
                             >
                                 사용자 및 권한 관리
                             </button>
+                            <button
+                                onClick={() => setActiveTab('data')}
+                                style={{ flex: 1, padding: '15px', background: activeTab === 'data' ? 'white' : '#f1f5f9', border: 'none', borderBottom: activeTab === 'data' ? `2px solid ${THEME.accent}` : 'none', fontWeight: '700', color: activeTab === 'data' ? THEME.primary : '#94a3b8', cursor: 'pointer' }}
+                            >
+                                데이터 관리
+                            </button>
                         </div>
 
                         <div style={{ padding: '25px', overflowY: 'auto' }}>
@@ -1799,18 +1805,117 @@ const SettingsModal = ({ isOpen, onClose, onUpload, onRefresh, onSimulateLogin, 
                             )}
 
                             {activeTab === 'users' && (
-                                <UserManagementPanel
-                                    themeColor={THEME.accent}
-                                    onSimulateLogin={onSimulateLogin}
-                                    onClose={onClose}
-                                    adminPassword={adminPassword}
-                                    user={user}
-                                />
+                                <UserManagementPanel themeColor={THEME.primary} onSimulateLogin={onSimulateLogin} onClose={onClose} adminPassword={adminPassword} user={user} />
+                            )}
+
+                            {activeTab === 'data' && (
+                                <DataManagementPanel themeColor={THEME.primary} />
                             )}
                         </div>
                     </div>
                 )}
             </div>
+        </div>
+    );
+};
+
+// [NEW] Data Management Panel
+const DataManagementPanel = ({ themeColor }) => {
+    const [files, setFiles] = useState([]);
+    const [loading, setLoading] = useState(false);
+
+    const fetchFiles = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/files', {
+                headers: { 'x-admin-password': 'orzoai' } // System Default or pass usage
+            });
+            const data = await res.json();
+            if (data.success) {
+                setFiles(data.files || []);
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchFiles();
+    }, []);
+
+    const handleDelete = async (path) => {
+        if (!confirm('정말 삭제하시겠습니까? (삭제된 데이터는 복구할 수 없습니다)')) return;
+        try {
+            const res = await fetch('/api/files', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json', 'x-admin-password': 'orzoai' },
+                body: JSON.stringify({ targetPath: path })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert('삭제되었습니다.');
+                fetchFiles();
+            } else {
+                alert(data.message);
+            }
+        } catch (e) {
+            alert('오류가 발생했습니다.');
+        }
+    };
+
+    // Group by top-level folder
+    const grouped = useMemo(() => {
+        const groups = {};
+        files.forEach(f => {
+            const parts = f.path.split('/');
+            const root = parts.length > 1 ? parts[0] : '기타 (루트 파일)';
+            if (!groups[root]) groups[root] = [];
+            groups[root].push(f);
+        });
+        return groups;
+    }, [files]);
+
+    return (
+        <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h3 style={{ fontSize: '1rem', color: themeColor, margin: 0 }}>서버 데이터 파일 관리</h3>
+                <button onClick={fetchFiles} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><RotateCw size={18} color="#94a3b8" /></button>
+            </div>
+
+            {loading ? (
+                <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8' }}>로딩 중...</div>
+            ) : files.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#cbd5e1' }}>데이터 파일이 없습니다.</div>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    {Object.entries(grouped).map(([folder, items]) => (
+                        <div key={folder} style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+                            <div style={{ background: '#f8fafc', padding: '12px 16px', fontWeight: 'bold', color: '#475569', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span>📁 {folder}</span>
+                                <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{items.length}개 파일</span>
+                            </div>
+                            <div>
+                                {items.map((file, idx) => (
+                                    <div key={idx} style={{ padding: '12px 16px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.9rem' }}>
+                                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginRight: '10px' }}>
+                                            <div style={{ color: '#334155' }}>{file.name}</div>
+                                            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{file.path}</div>
+                                        </div>
+                                        <button
+                                            onClick={() => handleDelete(file.path)}
+                                            style={{ padding: '6px 10px', borderRadius: '6px', background: '#fee2e2', color: '#ef4444', border: 'none', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}
+                                        >
+                                            삭제
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 };
