@@ -2172,13 +2172,14 @@ const DashboardView = ({ processedData, onSwitchMode, onSimulateLogin, adminPass
 
         const formData = new FormData();
         formData.append('pw', pw);
-        for (let i = 0; i < files.length; i++) {
-            // [FIX] Korean Filename Handling
-            // const file = files[i];
-            // const newName = encodeURIComponent(file.name);
-            // formData.append('files', file, newName);
-            formData.append('files', files[i]);
-        }
+        Array.from(files).forEach(file => {
+            // [FIX] Preserve Directory Structure
+            // Use webkitRelativePath if available (Folder Upload), otherwise name
+            const rawPath = file.webkitRelativePath || file.name;
+            // Replace separators with __ORD__ so server can decode it back to slash
+            const uploadName = rawPath.replace(/\//g, '__ORD__').replace(/\\/g, '__ORD__');
+            formData.append('files', file, uploadName);
+        });
 
         try {
             const res = await fetch('/api/upload', { method: 'POST', headers: { 'x-admin-password': pw }, body: formData });
