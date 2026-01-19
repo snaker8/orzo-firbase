@@ -379,7 +379,7 @@ const LoginOverlay = ({ onLogin, onRegister }) => {
 
 // PLACEHOLDERS for Components (will be replaced in next steps)
 const RealTimeView = ({ processedData, onClose, authPassword }) => {
-    useEffect(() => { alert('[Debug] RealTimeView Mounted'); }, []);
+    // [DEBUG REMOVED]
     const [page, setPage] = useState(0);
     const [animKey, setAnimKey] = useState(0);
     const [slideDuration, setSlideDuration] = useState(12);
@@ -523,9 +523,10 @@ const RealTimeView = ({ processedData, onClose, authPassword }) => {
     const currentSlide = slides[page];
 
     if (!currentSlide) return (
-        <div style={{ padding: '50px', textAlign: 'center' }}>
-            <h2>최근 과제 데이터가 없습니다.</h2>
-            <button onClick={onClose} style={{ marginTop: '20px', padding: '10px 20px', cursor: 'pointer' }}>돌아가기</button>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100dvh', background: '#f8fafc', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
+            <h2 style={{ fontSize: '1.5rem', color: '#1e293b', marginBottom: '20px' }}>표시할 과제 데이터가 없습니다.</h2>
+            <p style={{ color: '#64748b', marginBottom: '30px' }}>최근 2주 이내의 '과제' 데이터가 있는지 확인해주세요.</p>
+            <button onClick={onClose} style={{ padding: '12px 24px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '1rem' }}>돌아가기</button>
         </div>
     );
 
@@ -2056,7 +2057,7 @@ const DashboardDesktop = ({
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                         {/* [NEW] Change Password Button (Desktop) */}
                         <ChangePasswordButton user={user} />
-                        <button onClick={() => { alert('[Debug] Button Clicked'); onSwitchMode(); }} style={{ padding: '10px 20px', background: 'red', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold' }}>실시간 모드 전환</button>
+                        <button onClick={onSwitchMode} style={{ padding: '10px 20px', background: THEME.secondary, color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold' }}>실시간 모드 전환</button>
                         <div style={{ textAlign: 'right' }}><div style={{ fontSize: '2rem', fontWeight: '800', color: THEME.primary }}>{students.length}</div><div style={{ fontSize: '0.9rem', color: THEME.secondary, fontWeight: '600' }}>Students</div></div>
                     </div>
                 </div>
@@ -2988,14 +2989,7 @@ const Dashboard = ({ data }) => {
                                 selectedFolder={selectedFolder}
                                 setSelectedFolder={setSelectedFolder}
                                 processedData={validData} // Optimized Data
-                                onSwitchMode={() => {
-                                    console.log('[Dashboard] onSwitchMode Triggered');
-                                    setMode(m => {
-                                        const next = m === 'dashboard' ? 'report' : 'dashboard';
-                                        console.log('[Dashboard] Mode changing:', m, '->', next);
-                                        return next;
-                                    });
-                                }}
+                                onSwitchMode={() => setMode(m => m === 'dashboard' ? 'report' : 'dashboard')}
                                 onSimulateLogin={handleSimulateLogin} // [NEW] Use the handler we defined
                                 adminPassword={authPassword} // Pass for upload check
                                 user={user} // [FIX] Pass user prop
