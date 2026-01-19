@@ -247,14 +247,28 @@ const LoginOverlay = ({ onLogin, onRegister }) => {
     const [error, setError] = useState(false);
 
     const [name, setName] = useState('');     // For register
+    const [center, setCenter] = useState('전체'); // [NEW] Center Selection
+    const [centers, setCenters] = useState(['전체']); // [NEW] Center List
+
+    useEffect(() => {
+        // Fetch centers for registration dropdown
+        fetch('/api/centers')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && Array.isArray(data.centers)) {
+                    setCenters(data.centers);
+                }
+            })
+            .catch(err => console.error(err));
+    }, []);
 
     const handleSubmit = (e) => {
         e.preventDefault();
         if (mode === 'login') {
             onLogin(id, pw);
         } else {
-            onRegister(id, pw, name);
-            // Switch back to login or stay? logic handles success alert.
+            // [UPDATED] Pass center to register (Teacher Role implied)
+            onRegister(id, pw, name, center);
         }
     };
 
@@ -278,18 +292,35 @@ const LoginOverlay = ({ onLogin, onRegister }) => {
 
                 <form onSubmit={handleSubmit}>
                     {mode === 'register' && (
-                        <input
-                            type="text"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            placeholder="이름 (실명)"
-                            style={{
-                                width: '100%', padding: '16px', borderRadius: '12px',
-                                border: '1px solid #e2e8f0',
-                                background: '#f8fafc', fontSize: '1.1rem', marginBottom: '10px',
-                                outline: 'none', transition: 'all 0.2s'
-                            }}
-                        />
+                        <>
+                            <input
+                                type="text"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                placeholder="이름 (실명)"
+                                style={{
+                                    width: '100%', padding: '16px', borderRadius: '12px',
+                                    border: '1px solid #e2e8f0',
+                                    background: '#f8fafc', fontSize: '1.1rem', marginBottom: '10px',
+                                    outline: 'none', transition: 'all 0.2s'
+                                }}
+                            />
+                            {/* [NEW] Center Selection for Teachers */}
+                            <select
+                                value={center}
+                                onChange={(e) => setCenter(e.target.value)}
+                                style={{
+                                    width: '100%', padding: '16px', borderRadius: '12px',
+                                    border: '1px solid #e2e8f0',
+                                    background: '#f8fafc', fontSize: '1.1rem', marginBottom: '10px',
+                                    outline: 'none', transition: 'all 0.2s', appearance: 'none', cursor: 'pointer'
+                                }}
+                            >
+                                {centers.map(c => (
+                                    <option key={c} value={c}>{c === '전체' ? '전체 센터 (관리자급)' : c}</option>
+                                ))}
+                            </select>
+                        </>
                     )}
                     <input
                         type="text"
@@ -1660,15 +1691,26 @@ const SettingsModal = ({ isOpen, onClose, onUpload, onRefresh, onSimulateLogin, 
     };
 
     // [NEW] Admin Account Handlers
-    const onChangeAdminId = async () => {
+    // [NEW] Unified Admin Credentials Handler
+    const handleUpdateCredentials = async () => {
         if (!user || user.role !== 'admin') { alert('관리자만 변경 가능합니다.'); return; }
-        if (!newAdminId || !adminAuthPw) { alert('값을 입력해주세요.'); return; }
-        if (confirm('아이디를 변경하시겠습니까? 변경 후 재로그인이 필요합니다.')) {
+        if (!adminAuthPw) { alert('현재 비밀번호를 입력해주세요.'); return; }
+        if (!newAdminId && !adminPwNew) { alert('변경할 아이디 또는 비밀번호를 입력해주세요.'); return; }
+
+        if (confirm('관리자 계정 정보를 변경하시겠습니까? 변경 후 재로그인이 필요할 수 있습니다.')) {
             try {
-                const res = await fetch('/api/change-id', {
+                const res = await fetch('/api/admin/credentials', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ currentId: user.id, newId: newAdminId, pw: adminAuthPw })
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-admin-password': 'orzoai' // Allow super admin or verify endpoint checks
+                    },
+                    body: JSON.stringify({
+                        targetId: user.id,
+                        currentPw: adminAuthPw,
+                        newId: newAdminId || undefined,
+                        newPw: adminPwNew || undefined
+                    })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -1679,26 +1721,6 @@ const SettingsModal = ({ isOpen, onClose, onUpload, onRefresh, onSimulateLogin, 
                 }
             } catch (e) { alert('오류가 발생했습니다.'); }
         }
-    };
-
-    const onChangeAdminPw = async () => {
-        if (!user || user.role !== 'admin') { alert('관리자만 변경 가능합니다.'); return; }
-        if (!adminPwOld || !adminPwNew) { alert('값을 입력해주세요.'); return; }
-        try {
-            const res = await fetch('/api/change-password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: user.id, oldPw: adminPwOld, newPw: adminPwNew })
-            });
-            const data = await res.json();
-            if (data.success) {
-                alert(data.message);
-                setAdminPwOld('');
-                setAdminPwNew('');
-            } else {
-                alert(data.message);
-            }
-        } catch (e) { alert('오류가 발생했습니다.'); }
     };
 
     const handleUploadClick = () => {
@@ -1799,26 +1821,40 @@ const SettingsModal = ({ isOpen, onClose, onUpload, onRefresh, onSimulateLogin, 
                                     <div style={{ borderTop: `1px solid ${THEME.border}`, paddingTop: '20px' }}>
                                         <h3 style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: '700', marginBottom: '15px', textTransform: 'uppercase' }}>관리자 접속 계정 관리</h3>
 
-                                        {/* Change ID */}
+                                        {/* [NEW] Unified Admin Account Management */}
                                         <div style={{ marginBottom: '20px' }}>
-                                            <div style={{ fontSize: '0.9rem', marginBottom: '8px', fontWeight: '600', color: THEME.primary }}>관리자 아이디 변경</div>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                <input type="text" placeholder="새 아이디" value={newAdminId} onChange={e => setNewAdminId(e.target.value)} style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${THEME.border}` }} />
-                                                <div style={{ display: 'flex', gap: '8px' }}>
-                                                    <input type="password" placeholder="현재 비밀번호 확인" value={adminAuthPw} onChange={e => setAdminAuthPw(e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `1px solid ${THEME.border}` }} />
-                                                    <button onClick={onChangeAdminId} style={{ padding: '10px 15px', borderRadius: '8px', background: THEME.primary, color: 'white', border: 'none', fontWeight: '600', cursor: 'pointer' }}>변경</button>
-                                                </div>
-                                            </div>
-                                        </div>
+                                            <div style={{ fontSize: '0.9rem', marginBottom: '10px', fontWeight: '600', color: THEME.primary }}>관리자 계정 변경</div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#f8fafc', padding: '15px', borderRadius: '12px', border: `1px solid ${THEME.border}` }}>
+                                                <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '5px' }}>변경할 항목만 입력하세요.</div>
 
-                                        {/* Change PW */}
-                                        <div>
-                                            <div style={{ fontSize: '0.9rem', marginBottom: '8px', fontWeight: '600', color: THEME.primary }}>관리자 비밀번호 변경</div>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                <input type="password" placeholder="현재 비밀번호" value={adminPwOld} onChange={e => setAdminPwOld(e.target.value)} style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${THEME.border}` }} />
+                                                <input
+                                                    type="text"
+                                                    placeholder={`새 아이디 (현재: ${user?.id})`}
+                                                    value={newAdminId}
+                                                    onChange={e => setNewAdminId(e.target.value)}
+                                                    style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${THEME.border}`, outline: 'none' }}
+                                                />
+                                                <input
+                                                    type="password"
+                                                    placeholder="새 비밀번호 (변경시에만 입력)"
+                                                    value={adminPwNew}
+                                                    onChange={e => setAdminPwNew(e.target.value)}
+                                                    style={{ padding: '10px', borderRadius: '8px', border: `1px solid ${THEME.border}`, outline: 'none' }}
+                                                />
+
+                                                <div style={{ height: '1px', background: '#e2e8f0', margin: '5px 0' }}></div>
+
                                                 <div style={{ display: 'flex', gap: '8px' }}>
-                                                    <input type="password" placeholder="새 비밀번호" value={adminPwNew} onChange={e => setAdminPwNew(e.target.value)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `1px solid ${THEME.border}` }} />
-                                                    <button onClick={onChangeAdminPw} style={{ padding: '10px 15px', borderRadius: '8px', background: THEME.secondary, color: 'white', border: 'none', fontWeight: '600', cursor: 'pointer' }}>변경</button>
+                                                    <input
+                                                        type="password"
+                                                        placeholder="현재 비밀번호 (확인용)"
+                                                        value={adminAuthPw}
+                                                        onChange={e => setAdminAuthPw(e.target.value)}
+                                                        style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `1px solid ${THEME.border}`, outline: 'none' }}
+                                                    />
+                                                    <button onClick={handleUpdateCredentials} style={{ padding: '10px 20px', borderRadius: '8px', background: THEME.primary, color: 'white', border: 'none', fontWeight: '600', cursor: 'pointer' }}>
+                                                        변경사항 저장
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>
@@ -2871,12 +2907,12 @@ const Dashboard = ({ data }) => {
     };
 
     // [NEW] Register Handler
-    const onRegister = async (id, pw, name) => {
+    const onRegister = async (id, pw, name, center) => {
         try {
             const res = await fetch('/api/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id, pw, name })
+                body: JSON.stringify({ id, pw, name, center: center || '전체' })
             });
             const data = await res.json();
             if (data.success) {

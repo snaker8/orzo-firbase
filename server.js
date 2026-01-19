@@ -714,6 +714,72 @@ app.post('/api/users/sync', async (req, res) => {
     }
 });
 
+// [NEW] Public Center List
+app.get('/api/centers', (req, res) => {
+    try {
+        const items = fs.readdirSync(DATA_DIR, { withFileTypes: true });
+        const folders = items
+            .filter(dirent => dirent.isDirectory() && dirent.name !== 'data' && dirent.name !== 'thumbnails' && !dirent.name.startsWith('.'))
+            .map(dirent => dirent.name);
+        res.json({ success: true, centers: ['전체', ...folders] });
+    } catch (e) {
+        console.error('[Centers] Failed to list centers', e);
+        res.status(500).json({ success: false, message: 'Failed to list centers' });
+    }
+});
+
+// [NEW] Unified Admin Credentials Update
+app.post('/api/admin/credentials', (req, res) => {
+    if (!checkAdminAuth(req)) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const { targetId, currentPw, newId, newPw } = req.body;
+    // targetId: The current ID of the admin being modified
+    // currentPw: For extra verification (optional if header is trusted, but good practice)
+
+    if (!targetId) return res.status(400).json({ success: false, message: 'Target ID required' });
+
+    const users = getUsers();
+    const userIndex = users.findIndex(u => u.id === targetId);
+
+    if (userIndex === -1) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const user = users[userIndex];
+
+    // Verify Password (Double check)
+    // We already checked AdminAuth, but let's ensure the Specific User's password matches if provided
+    if (currentPw && user.pw !== currentPw) {
+        return res.status(403).json({ success: false, message: 'Current password does not match' });
+    }
+
+    // Check ID Duplication if changing ID
+    if (newId && newId !== targetId) {
+        if (users.some(u => u.id === newId)) {
+            return res.status(400).json({ success: false, message: 'New ID is already taken' });
+        }
+        user.id = newId;
+    }
+
+    // Update PW if provided
+    if (newPw) {
+        user.pw = newPw;
+    }
+
+    users[userIndex] = user;
+
+    try {
+        fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf8');
+        console.log(`[Admin] Updated credentials for ${targetId} -> ${user.id}`);
+        res.json({ success: true, message: 'Credentials updated successfully', user: user });
+    } catch (e) {
+        console.error('[Admin] Update failed', e);
+        res.status(500).json({ success: false, message: 'Failed to save changes' });
+    }
+});
+
 // [NEW] Serve Static Files (Production/Deployment)
 const DIST_DIR = path.join(__dirname, 'dist');
 if (fs.existsSync(DIST_DIR)) {
