@@ -140,6 +140,13 @@ const extractCourse = (title) => {
     if (t.includes('수1') || t.includes('수학1')) return '수학1';
     if (t.includes('수2') || t.includes('수학2')) return '수학2';
     if (t.includes('대수')) return '대수';
+    // [NEW] Keyword Inference
+    if (t.includes('원의방정식')) return '공통수학2';
+    if (t.includes('집합')) return '공통수학2';
+    // [NEW] Middle School
+    const middleMatch = t.match(/([^0-9]|^)([1-3])[-]([1-2])/);
+    if (middleMatch) return `중${middleMatch[2]}-${middleMatch[3]}`;
+
     const match = t.match(/(중|고)(\d)[-\.]?(\d)/);
     if (match) return `${match[1]}${match[2]}-${match[3]}`;
     return '정규과정';
@@ -983,10 +990,10 @@ const ReportModal = ({ selectedStudent, records, onClose, initialAction }) => {
                                         <td style={{ padding: '12px', textAlign: 'center' }}>
                                             <span style={{
                                                 fontSize: '0.75rem', fontWeight: '700', padding: '4px 8px', borderRadius: '6px',
-                                                background: isCompleted ? '#ecfdf5' : '#fff7ed',
-                                                color: isCompleted ? '#059669' : '#ea580c'
+                                                background: record.status === '학습중' || record.status === '풀이중' ? '#fff7ed' : '#ecfdf5',
+                                                color: record.status === '학습중' || record.status === '풀이중' ? '#ea580c' : '#059669'
                                             }}>
-                                                {isCompleted ? '채점완료' : '학습중'}
+                                                {record.status === '학습중' || record.status === '풀이중' ? '학습중' : '채점완료'}
                                             </span>
                                         </td>
                                         <td style={{ padding: '12px', textAlign: 'center' }}>
@@ -1378,10 +1385,10 @@ const StudentDetailView = ({ student, onClose, onOpenReport, isMobile, showRepor
                                                         <td style={{ padding: '14px 20px', textAlign: 'center' }}>
                                                             <span style={{
                                                                 fontSize: '0.75rem', fontWeight: '700', padding: '4px 8px', borderRadius: '6px',
-                                                                background: isCompleted ? '#ecfdf5' : '#fff7ed',
-                                                                color: isCompleted ? '#059669' : '#ea580c'
+                                                                background: record.status === '학습중' || record.status === '풀이중' ? '#fff7ed' : '#ecfdf5',
+                                                                color: record.status === '학습중' || record.status === '풀이중' ? '#ea580c' : '#059669'
                                                             }}>
-                                                                {isCompleted ? '채점완료' : '학습중'}
+                                                                {record.status === '학습중' || record.status === '풀이중' ? '학습중' : '채점완료'}
                                                             </span>
                                                         </td>
                                                         <td style={{ padding: '14px 20px', textAlign: 'center' }}>
@@ -2410,10 +2417,35 @@ const DashboardView = ({ processedData, onSwitchMode, onSimulateLogin, adminPass
         }
     }, []);
 
-    const filtered = useMemo(() => {
+    // [FIX] Base Data for Detail View (All Students, Folder Filtered Only)
+    const baseFiltered = useMemo(() => {
         if (!processedData) return [];
-        return processedData.filter(d => {
-            const matchFolder = selectedFolder === '전체' || d.folder === selectedFolder;
+        return processedData.filter(d => selectedFolder === '전체' || d.folder === selectedFolder);
+    }, [processedData, selectedFolder]);
+
+    const allStudents = useMemo(() => {
+        const map = {};
+        baseFiltered.forEach(item => {
+            if (!map[item.name]) {
+                map[item.name] = {
+                    name: item.name, className: item.className, folder: item.folder,
+                    records: [], courseList: [], avgScore: 0
+                };
+            }
+            map[item.name].records.push(item);
+        });
+        Object.values(map).forEach(s => {
+            s.records.sort((a, b) => b.dateObj - a.dateObj);
+            s.courseList = [...new Set(s.records.map(r => r.course))];
+            const sum = s.records.reduce((acc, r) => acc + r.score, 0);
+            s.avgScore = s.records.length > 0 ? Math.round(sum / s.records.length) : 0;
+        });
+        return Object.values(map).sort((a, b) => b.avgScore - a.avgScore);
+    }, [baseFiltered]);
+
+    const filtered = useMemo(() => {
+        if (!baseFiltered) return [];
+        return baseFiltered.filter(d => {
             const matchClass = selectedClass === '전체' || d.className === selectedClass;
             const searchLower = searchQuery.toLowerCase();
             let matchSearch = d.name.toLowerCase().includes(searchLower) || d.className.toLowerCase().includes(searchLower);
@@ -2423,11 +2455,12 @@ const DashboardView = ({ processedData, onSwitchMode, onSimulateLogin, adminPass
             }
             let matchDate = true;
             if (startDate && d.dateStr < startDate) matchDate = false;
-            return matchFolder && matchClass && matchSearch && matchDate;
+            return matchClass && matchSearch && matchDate;
         });
-    }, [processedData, selectedFolder, selectedClass, searchQuery, startDate, endDate]);
+    }, [baseFiltered, selectedClass, searchQuery, startDate]);
 
     const students = useMemo(() => {
+        // Compute stats just for the Grid View (filtered subset)
         const map = {};
         filtered.forEach(item => {
             if (!map[item.name]) {
@@ -2456,8 +2489,9 @@ const DashboardView = ({ processedData, onSwitchMode, onSimulateLogin, adminPass
 
     const selectedStudent = useMemo(() => {
         if (!selectedStudentName) return null;
-        return students.find(s => s.name === selectedStudentName);
-    }, [selectedStudentName, students]);
+        // [FIX] Look up from allStudents to ensure we show full history in Detail View
+        return allStudents.find(s => s.name === selectedStudentName);
+    }, [selectedStudentName, allStudents]);
 
     // [NEW] Auto-Select Student if Role is Student
     useEffect(() => {
