@@ -18,26 +18,20 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'orzoai'; // [SEC] Server-s
 // [HELPER] Smart Encoding Repair
 const fixTextEncoding = (text) => {
     try {
-        let decoded = text;
-        // Check for Mojibake (If it looks like Latin1 but should be UTF-8)
-        // If we only have chars <= 255, it might be a Korean string read as Latin1.
-        // Real UTF-8 would have multi-byte chars (encoded as multiple Latin1 chars).
-        const hasHighChars = /[^\u0000-\u00ff]/.test(text);
+        if (!text) return text;
+        // [FIX] More robust Mojibake detection for Korean (UTF-8 vs Latin1)
+        // If the string contains sequence of bytes that form valid UTF-8 when interpreted as Latin1
+        const buffer = Buffer.from(text, 'latin1');
 
-        if (!hasHighChars) {
-            // Try repairing: Latin1 -> Buffer -> UTF-8
-            const repaired = Buffer.from(text, 'latin1').toString('utf8');
-            // Check if repair made sense (e.g. resulted in valid Hangul)
-            // This is a heuristic. If the repaired string is radically different or contains common valid chars.
-            // Simplified: Just use the repair.
-            decoded = repaired;
-            // console.log(`[Encoding] Repaired: ${text} => ${decoded}`);
-        } else {
-            // console.log(`[Encoding] Accessing raw: ${text}`);
-        }
+        // Check if it's already proper UTF-8
+        try {
+            const utf8Str = buffer.toString('utf8');
+            // Check if it has common Korean chars. If not, maybe it was EUC-KR or already okay.
+            if (/[가-힣]/.test(utf8Str)) return utf8Str;
+        } catch (e) { }
 
-        // Always fix __ORD__ and backslashes
-        return decoded.replace(/__ORD__/g, '/').replace(/\\/g, '/');
+        // Fallback or specific replacements
+        return text.replace(/__ORD__/g, '/').replace(/\\/g, '/');
     } catch (e) {
         console.error('[Encoding Info]', e);
         return text;
@@ -190,7 +184,10 @@ app.delete('/api/files', (req, res) => {
 
 // Request Logger
 app.use((req, res, next) => {
-    console.log(`[Request] ${req.method} ${req.url}`);
+    // [NOISE REDUCTION] Skip logging for frequent polling endpoints
+    if (!req.url.startsWith('/api/data')) {
+        console.log(`[Request] ${req.method} ${req.url}`);
+    }
     next();
 });
 

@@ -124,7 +124,7 @@ const parseDateSafe = (val) => {
 
 const refineTitle = (rawTitle) => {
     if (!rawTitle) return '제목 없음';
-    return String(rawTitle).replace(/[\[\]]/g, ' ').replace(/\(.*\)/, '').trim();
+    return String(rawTitle).normalize('NFC').replace(/[\[\]]/g, ' ').replace(/\(.*\)/, '').trim();
 };
 
 const extractCourse = (title) => {
@@ -246,38 +246,42 @@ const getScore = (item) => {
     return safeNumber(findValue(item, ['점수', 'Score', '맞은', '정답']));
 };
 
-// [NEW] Login Component (with Registration)
+// [FIREBASE IMPORT]
+import { db, storage, auth, collection, getDocs, addDoc, setDoc, deleteDoc, doc, updateDoc, onSnapshot, query, where, orderBy, ref, uploadBytes, getDownloadURL, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, updatePassword } from './firebase';
+
+// ... (Existing Imports) ...
+
+// [REMOVED] Local API calls
+// const LoginOverlay = ...
 const LoginOverlay = ({ onLogin, onRegister }) => {
-    const [mode, setMode] = useState('login'); // 'login' | 'register'
-    const [id, setId] = useState('');
-    const [pw, setPw] = useState('');
+    const [mode, setMode] = useState('login');
+    const [id, setId] = useState(''); // Email
+    const [pw, setPw] = useState(''); // Password
     const [error, setError] = useState(false);
+    const [name, setName] = useState('');
+    const [loading, setLoading] = useState(false);
 
-    const [name, setName] = useState('');     // For register
-    const [center, setCenter] = useState('전체'); // [NEW] Center Selection
-    const [centers, setCenters] = useState(['전체']); // [NEW] Center List
-
-    useEffect(() => {
-        // Fetch centers for registration dropdown
-        fetch('/api/centers')
-            .then(res => res.json())
-            .then(data => {
-                if (data.success && Array.isArray(data.centers)) {
-                    setCenters(data.centers);
-                }
-            })
-            .catch(err => console.error(err));
-    }, []);
-
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        if (mode === 'login') {
-            onLogin(id, pw);
-        } else {
-            // [UPDATED] Pass center to register (Teacher Role implied)
-            onRegister(id, pw, name, center);
+        setLoading(true);
+        setError(false);
+        try {
+            if (mode === 'login') {
+                // Delegate to parent's handleLogin(id, pw)
+                await onLogin(id, pw);
+            } else {
+                // Delegate to parent's onRegister(id, pw, name, center)
+                await onRegister(id, pw, name, center || '전체');
+            }
+        } catch (err) {
+            console.error(err);
+            setError(true);
+            // Alert is handled in parent, but we handle unexpected UI errors here if needed
+        } finally {
+            setLoading(false);
         }
     };
+
 
     return (
         <div style={{
@@ -401,44 +405,62 @@ const RealTimeView = ({ processedData, onClose, authPassword }) => {
         const files = e.target.files;
         if (!files || files.length === 0) return;
 
-        const pw = prompt("관리자 비밀번호를 입력하세요 (기본: orzoai)");
-        if (pw !== "orzoai") {
-            alert("비밀번호가 올바르지 않습니다.");
-            e.target.value = '';
-            return;
-        }
+        // [NEW] Check if we are running in local server mode or Firebase mode
+        // If vite proxy is active and server is reachable, use local API.
+        const useLocalProxy = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '3000';
 
-        const formData = new FormData();
-        Array.from(files).forEach(file => {
-            // [IMPORTANT] Encode path separators to '__ORD__' to survive proxy path stripping
-            // If we send "Folder/File.csv", some proxies change it to "File.csv". 
-            // We send "Folder__ORD__File.csv" instead.
-            const rawPath = file.webkitRelativePath || file.name;
-            const uploadName = rawPath.replace(/\//g, '__ORD__').replace(/\\/g, '__ORD__');
-            formData.append('files', file, uploadName);
-        });
-
-        // [DEBUG] Confirm what we are sending
-        const firstFile = Array.from(files)[0];
-        const debugName = (firstFile.webkitRelativePath || firstFile.name).replace(/\//g, '__ORD__').replace(/\\/g, '__ORD__');
-        // alert(`[DEBUG] Uploading... Example: ${debugName}`); 
-
-        try {
-            const res = await fetch('/api/upload', {
-                method: 'POST',
-                headers: { 'x-admin-password': pw },
-                body: formData
-            });
-            const data = await res.json();
-            if (data.success) {
-                alert(`업로드 성공! (${data.count}개 파일) 데이터가 곧 갱신됩니다.\n첫 번째 파일 경로: ${debugName}`);
-                if (window.location.reload) setTimeout(() => window.location.reload(), 2000);
-            } else {
-                alert("업로드 실패: " + data.message);
+        if (useLocalProxy) {
+            // Local Server Upload
+            const pw = prompt("관리자 비밀번호를 입력하세요 (기본: orzoai)");
+            if (pw !== "orzoai") {
+                alert("비밀번호가 올바르지 않습니다.");
+                e.target.value = '';
+                return;
             }
-        } catch (err) {
-            console.error(err);
-            alert("업로드 중 오류가 발생했습니다: " + (err.message || err));
+
+            const formData = new FormData();
+            Array.from(files).forEach(file => {
+                const rawPath = file.webkitRelativePath || file.name;
+                const uploadName = rawPath.replace(/\//g, '__ORD__').replace(/\\/g, '__ORD__');
+                formData.append('files', file, uploadName);
+            });
+
+            try {
+                const res = await fetch('/api/upload', {
+                    method: 'POST',
+                    headers: { 'x-admin-password': pw },
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`업로드 성공! (${data.count}개 파일) 로컬 데이터가 곧 갱신됩니다.`);
+                    if (window.location.reload) setTimeout(() => window.location.reload(), 2000);
+                } else {
+                    alert("업로드 실패: " + data.message);
+                }
+            } catch (err) {
+                console.error(err);
+                alert("로컬 서버 업로드 중 오류가 발생했습니다: " + (err.message || err));
+            }
+        } else {
+            // Firebase Storage Upload (Fallback for remote/cloud users)
+            try {
+                const promises = Array.from(files).map(async (file) => {
+                    let path = `uploads/${file.name}`;
+                    if (file.webkitRelativePath) {
+                        path = `uploads/${file.webkitRelativePath}`;
+                    }
+                    const storageRef = ref(storage, path);
+                    await uploadBytes(storageRef, file);
+                    return file.name;
+                });
+                await Promise.all(promises);
+                alert(`Firebase 업로드 성공! (${files.length}개 파일) 클라우드 처리가 곧 시작됩니다.`);
+                if (window.location.reload) setTimeout(() => window.location.reload(), 3000);
+            } catch (err) {
+                console.error(err);
+                alert("Firebase 업로드 중 오류가 발생했습니다: " + err.message);
+            }
         }
         e.target.value = '';
     };
@@ -452,7 +474,7 @@ const RealTimeView = ({ processedData, onClose, authPassword }) => {
         }
     };
 
-    const itemsPerPage = 8; // [UPDATED] Changed from 12 to 8
+    const itemsPerPage = 8;
 
     const slides = useMemo(() => {
         const result = [];
@@ -1455,124 +1477,72 @@ const UserManagementPanel = ({ themeColor, onSimulateLogin, onClose, adminPasswo
 
     const fetchUsers = async () => {
         setLoading(true);
-        setFetchSuccess(false); // Reset
-        console.log('[Debug] Fetching users...');
+        setFetchSuccess(false);
         try {
-            const res = await fetch('/api/users?pw=orzoai', {
-                headers: {
-                    'x-admin-password': 'orzoai',
-                    'x-user-id': user ? encodeURIComponent(user.id) : '',
-                    'x-user-pw': user ? encodeURIComponent(user.pw) : ''
-                }
-            });
-            console.log('[Debug] Fetch status:', res.status);
-            if (res.ok) {
-                const data = await res.json();
-                console.log('[Debug] Fetched data:', data);
-
-                if (Array.isArray(data)) {
-                    setUsers(data);
-                    setFetchSuccess(true); // Allow saving
-                    if (data.length === 0) alert('[Debug] User list is empty even after fetch!');
-                } else {
-                    console.error('[Debug] Data is not an array:', data);
-                    alert('[Debug] Server returned invalid data format.');
-                }
-            } else {
-                const errText = await res.text();
-                console.error('[Debug] Fetch failed:', errText);
-                alert(`[Debug] Failed to fetch users: ${res.status}\n${errText}`);
-            }
+            const q = query(collection(db, "users"));
+            const querySnapshot = await getDocs(q);
+            const data = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })); // Use doc.id as id
+            setUsers(data);
+            setFetchSuccess(true);
         } catch (error) {
             console.error('Failed to fetch users', error);
-            alert(`[Debug] Network Error: ${error.message}`);
+            alert(`사용자 목록을 불러오지 못했습니다: ${error.message}`);
         } finally {
             setLoading(false);
         }
     };
 
     const handleSyncUsers = async () => {
-        if (!confirm('업로드된 데이터를 기반으로 사용자 계정을 자동 생성하시겠습니까?\n(기존 계정은 유지되며, 없는 이름만 추가됩니다. 기본 비밀번호: 1234)')) return;
+        // [TODO] Implement Cloud Function for user sync if needed.
+        // For now, client-side sync is too heavy and insecure.
+        alert('이 기능은 현재 유지보수 중입니다.');
+    };
 
+    const handleAddUser = async () => {
+        if (!newUser.id || !newUser.pw || !newUser.name) {
+            alert('모든 필드를 입력해주세요.');
+            return;
+        }
         setLoading(true);
         try {
-            const res = await fetch('/api/users/sync?pw=orzoai', {
-                method: 'POST',
-                headers: {
-                    'x-admin-password': 'orzoai',
-                    'x-user-id': user ? encodeURIComponent(user.id) : '',
-                    'x-user-pw': user ? encodeURIComponent(user.pw) : ''
-                }
+            // Create user doc in Firestore (Note: This does NOT create Auth account automatically due to client SDK limits)
+            // Ideally, we use a Callable Cloud Function for "Admin Creates User".
+            // For now, we will save to Firestore 'users' collection so they can be managed.
+            // But they won't be able to login unless they register via Auth (LoginOverlay).
+            await setDoc(doc(db, "users", newUser.id), {
+                ...newUser,
+                email: newUser.id.includes('@') ? newUser.id : `${newUser.id}@orzo.edu`,
+                approved: newUser.role === 'teacher' ? false : true
             });
-            const data = await res.json();
-            console.log('[Debug] Sync result:', data);
-
-            if (data.success) {
-                if (data.message) alert(data.message);
-                else alert(`동기화 완료!\n총 ${data.addedCount}명의 사용자가 추가되었습니다.`);
-
-                // Force a small delay before refetching to ensure disk write completes
-                setTimeout(() => {
-                    fetchUsers();
-                }, 500);
-            } else {
-                alert('동기화 실패: ' + data.message);
-            }
+            alert('사용자가 추가되었습니다. (실제 로그인을 위해서는 해당 계정으로 가입 절차가 필요할 수 있습니다)');
+            setNewUser({ id: '', pw: '', name: '', role: 'student', center: '전체' });
+            fetchUsers();
         } catch (e) {
             console.error(e);
-            alert('오류가 발생했습니다: ' + e.message);
+            alert('사용자 추가 실패: ' + e.message);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleAddUser = () => {
-        if (!newUser.id || !newUser.pw || !newUser.name) {
-            alert('모든 필드를 입력해주세요.');
-            return;
-        }
-        if (users.some(u => u.id === newUser.id)) {
-            alert('이미 존재하는 아이디입니다.');
-            return;
-        }
-        const updatedUsers = [...users, newUser];
-        setUsers(updatedUsers);
-        setNewUser({ id: '', pw: '', name: '', role: 'student' });
-        setIsDirty(true);
-    };
-
-    const handleDeleteUser = (id) => {
+    const handleDeleteUser = async (id) => {
         if (!confirm('정말 삭제하시겠습니까?')) return;
-        setUsers(users.filter(u => u.id !== id));
-        setIsDirty(true);
+        setLoading(true);
+        try {
+            await deleteDoc(doc(db, "users", id));
+            fetchUsers();
+        } catch (e) {
+            console.error(e);
+            alert('삭제 실패: ' + e.message);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleSave = async () => {
-        if (!fetchSuccess) {
-            alert("데이터를 불러오지 못했기 때문에 저장할 수 없습니다. 새로고침 후 다시 시도해주세요.");
-            return;
-        }
-        try {
-            const res = await fetch('/api/users?pw=orzoai', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-admin-password': 'orzoai',
-                    'x-user-id': user ? encodeURIComponent(user.id) : '',
-                    'x-user-pw': user ? encodeURIComponent(user.pw) : ''
-                },
-                body: JSON.stringify(users)
-            });
-            if (res.ok) {
-                alert('저장되었습니다.');
-                setIsDirty(false);
-            } else {
-                alert('저장 실패');
-            }
-        } catch (error) {
-            console.error('Save failed', error);
-            alert('저장 중 오류가 발생했습니다.');
-        }
+        // Deprecated: Now we save immediately on Add/Delete
+        alert('자동으로 저장되었습니다.');
+        setIsDirty(false);
     };
 
     return (
@@ -1724,34 +1694,7 @@ const SettingsModal = ({ isOpen, onClose, onUpload, onRefresh, onSimulateLogin, 
     // [NEW] Admin Account Handlers
     // [NEW] Unified Admin Credentials Handler
     const handleUpdateCredentials = async () => {
-        if (!user || user.role !== 'admin') { alert('관리자만 변경 가능합니다.'); return; }
-        if (!adminAuthPw) { alert('현재 비밀번호를 입력해주세요.'); return; }
-        if (!newAdminId && !adminPwNew) { alert('변경할 아이디 또는 비밀번호를 입력해주세요.'); return; }
-
-        if (confirm('관리자 계정 정보를 변경하시겠습니까? 변경 후 재로그인이 필요할 수 있습니다.')) {
-            try {
-                const res = await fetch('/api/admin/credentials', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-admin-password': 'orzoai' // Allow super admin or verify endpoint checks
-                    },
-                    body: JSON.stringify({
-                        targetId: user.id,
-                        currentPw: adminAuthPw,
-                        newId: newAdminId || undefined,
-                        newPw: adminPwNew || undefined
-                    })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    alert(data.message);
-                    window.location.reload();
-                } else {
-                    alert(data.message);
-                }
-            } catch (e) { alert('오류가 발생했습니다.'); }
-        }
+        alert("계정 관리는 Firebase Console을 이용해주세요.");
     };
 
     const handleUploadClick = () => {
@@ -2393,31 +2336,25 @@ const DashboardView = ({ processedData, onSwitchMode, onSimulateLogin, adminPass
         const files = e.target.files;
         if (!files || files.length === 0) return;
 
-        const pw = adminPassword || prompt("관리자 비밀번호를 입력하세요 (기본: orzoai)");
-        if (!pw) {
-            alert("비밀번호가 필요합니다.");
-            return;
-        }
-
-        const formData = new FormData();
-        formData.append('pw', pw);
-        Array.from(files).forEach(file => {
-            // [FIX] Preserve Directory Structure
-            // Use webkitRelativePath if available (Folder Upload), otherwise name
-            const rawPath = file.webkitRelativePath || file.name;
-            // Replace separators with __ORD__ so server can decode it back to slash
-            const uploadName = rawPath.replace(/\//g, '__ORD__').replace(/\\/g, '__ORD__');
-            formData.append('files', file, uploadName);
-        });
-
+        // Firebase Storage Upload
         try {
-            const res = await fetch('/api/upload', { method: 'POST', headers: { 'x-admin-password': pw }, body: formData });
-            const data = await res.json();
-            if (data.success) {
-                alert(`업로드 성공! (${data.count}개 파일)`);
-                if (window.location.reload) setTimeout(() => window.location.reload(), 2000);
-            } else { alert("업로드 실패: " + data.message); }
-        } catch (err) { console.error(err); alert("업로드 중 오류가 발생했습니다."); }
+            const promises = Array.from(files).map(async (file) => {
+                // Determine path: use webkitRelativePath if available, else standard uploads/
+                let path = `uploads/${file.name}`;
+                if (file.webkitRelativePath) {
+                    path = `uploads/${file.webkitRelativePath}`;
+                }
+                const storageRef = ref(storage, path);
+                await uploadBytes(storageRef, file);
+                return file.name;
+            });
+            await Promise.all(promises);
+            alert(`업로드 성공! (${files.length}개 파일) 클라우드 처리가 시작되었습니다. 잠시 후 새로고침하세요.`);
+            if (window.location.reload) setTimeout(() => window.location.reload(), 3000);
+        } catch (err) {
+            console.error(err);
+            alert("업로드 중 오류가 발생했습니다: " + err.message);
+        }
         e.target.value = '';
     };
 
@@ -2592,9 +2529,8 @@ const DashboardView = ({ processedData, onSwitchMode, onSimulateLogin, adminPass
 
 const Dashboard = ({ data }) => {
     // [UI] Splash Screen State
-    const [showSplash, setShowSplash] = useState(true); // [REVERT] Show Splash First
-    // [PERF] Deferred Rendering State
-    const [isAppLoaded, setIsAppLoaded] = useState(false); // [REVERT]
+    const [showSplash, setShowSplash] = useState(true);
+    const [isAppLoaded, setIsAppLoaded] = useState(false);
 
 
     // [AUTH]
@@ -2624,41 +2560,23 @@ const Dashboard = ({ data }) => {
         const files = e.target.files;
         if (!files || files.length === 0) return;
 
-        const pw = prompt("관리자 비밀번호를 입력하세요 (기본: orzoai)");
-        if (pw !== "orzoai") {
-            alert("비밀번호가 올바르지 않습니다.");
-            e.target.value = '';
-            return;
-        }
-
-        const formData = new FormData();
-        Array.from(files).forEach(file => {
-            // [IMPORTANT] Encode path separators to '__ORD__' to survive proxy path stripping
-            const rawPath = file.webkitRelativePath || file.name;
-            const uploadName = rawPath.replace(/\//g, '__ORD__').replace(/\\/g, '__ORD__');
-            formData.append('files', file, uploadName);
-        });
-
-        // [DEBUG]
-        const firstFile = Array.from(files)[0];
-        const debugName = (firstFile.webkitRelativePath || firstFile.name).replace(/\//g, '__ORD__').replace(/\\/g, '__ORD__');
-
+        // Firebase Storage Upload
         try {
-            const res = await fetch('/api/upload', {
-                method: 'POST',
-                headers: { 'x-admin-password': pw },
-                body: formData
+            const promises = Array.from(files).map(async (file) => {
+                let path = `uploads/${file.name}`;
+                if (file.webkitRelativePath) {
+                    path = `uploads/${file.webkitRelativePath}`;
+                }
+                const storageRef = ref(storage, path);
+                await uploadBytes(storageRef, file);
+                return file.name;
             });
-            const data = await res.json();
-            if (data.success) {
-                alert(`업로드 성공! (${data.count}개 파일) 데이터가 곧 갱신됩니다.\n첫 번째 파일 경로: ${debugName}`);
-                if (window.location.reload) setTimeout(() => window.location.reload(), 2000);
-            } else {
-                alert("업로드 실패: " + data.message);
-            }
+            await Promise.all(promises);
+            alert(`업로드 성공! (${files.length}개 파일) 데이터가 곧 갱신됩니다.`);
+            if (window.location.reload) setTimeout(() => window.location.reload(), 2000);
         } catch (err) {
             console.error(err);
-            alert("업로드 중 오류가 발생했습니다.");
+            alert("업로드 중 오류가 발생했습니다: " + err.message);
         }
         e.target.value = '';
     };
@@ -2671,34 +2589,7 @@ const Dashboard = ({ data }) => {
     const processedData = useMemo(() => {
         if (!effectiveData || !Array.isArray(effectiveData)) return [];
 
-        // [FIX] Deduplication Logic: Prefer files in folders over root
-        // 1. Group paths by filename
-        const fileLocs = {};
-        effectiveData.forEach(item => {
-            const fname = item.sourceFile;
-            const fpath = item.folderPath || '.';
-            if (!fileLocs[fname]) fileLocs[fname] = new Set();
-            fileLocs[fname].add(fpath);
-        });
-
-        // 2. Choose best path for each file (Non-root > Root)
-        const bestPathForFile = {};
-        Object.keys(fileLocs).forEach(fname => {
-            const paths = Array.from(fileLocs[fname]);
-            paths.sort((a, b) => {
-                const aScore = (a === '.' || a === '기타') ? 0 : a.length;
-                const bScore = (b === '.' || b === '기타') ? 0 : b.length;
-                return bScore - aScore; // Descending (Longer/Specific path wins)
-            });
-            bestPathForFile[fname] = paths[0];
-        });
-
-        // 3. Filter and Map
-        return effectiveData.filter(item => {
-            const best = bestPathForFile[item.sourceFile];
-            const current = item.folderPath || '.';
-            return current === best;
-        }).map(item => {
+        return effectiveData.map(item => {
             try {
                 const nameKey = Object.keys(item).find(k => k.includes('이름') || k.includes('Name'));
                 const name = nameKey ? item[nameKey] : (item.sourceFile?.split('_')[0] || '이름없음');
@@ -2753,10 +2644,10 @@ const Dashboard = ({ data }) => {
                 if (folder === '.' || folder.trim() === '' || folder.toLowerCase() === 'data') folder = '기타';
 
                 return {
-                    name: String(name).trim(),
-                    folder: folder,
-                    className: className,
-                    title: refineTitle(rawTitle),
+                    name: String(name).trim().normalize('NFC'),
+                    folder: folder.normalize('NFC'),
+                    className: className.normalize('NFC'),
+                    title: refineTitle(rawTitle), // Already NFC
                     course: extractCourse(rawTitle),
                     score: getScore(item),
                     status: findValue(item, ['상태', 'Status']) || '-',
@@ -2858,128 +2749,155 @@ const Dashboard = ({ data }) => {
     useEffect(() => {
         if (!isAuthenticated || !user) return;
 
-        const fetchWithStrategy = async (url, strategyName) => {
-            try {
-                // [UPDATED] Send different headers based on role
-                const headers = {};
-                // If we are simulating, we still need to fetch data.
-                // However, the backend /api/data filters by header.
-                // If we are simulating 'student', we should send student header so backend returns filtered data.
-                // But wait, if backend sees 'student' header, it filters.
-                // If we are admin simulating, we effectively ARE that student for data purposes.
-
-                if (user.role === 'admin' && user.id === 'admin') {
-                    // Legacy Global Admin
-                    headers['x-admin-password'] = authPassword || 'orzoai';
-                } else {
-                    // [NEW] Unified logic for Student AND Multi-Admin
-                    // Both send ID/PW. Server decides based on role.
-                    headers['x-user-id'] = encodeURIComponent(user.id);
-                    headers['x-user-pw'] = encodeURIComponent(user.pw);
-                }
-
-                // [Special Case] If Admin Simulation, we might be a student role in 'user' state,
-                // BUT we don't have that student's password in 'user.pw' if we just switched state?
-                // Actually we pass the whole user object in onSimulateLogin, which comes from /api/users, so it HAS the password.
-                // So the above logic holds!
-
-                const response = await fetch(url, { headers });
-
-                if (response.status === 401) {
-                    console.warn(`[Auth] 401 Unauthorized from ${strategyName}`);
-
-                    // [IMPORTANT] Check if it's an approval error message
-                    try {
-                        const errClone = response.clone();
-                        const errJson = await errClone.json();
-                        if (errJson.message && errJson.message.includes('승인 대기')) {
-                            alert(errJson.message);
-                            setIsAuthenticated(false);
-                            return true; // Stop trying
-                        }
-                    } catch (e) { }
-
-                    alert("인증 정보가 만료되었습니다. 다시 로그인해주세요.");
-                    sessionStorage.removeItem('orzo_user');
-                    sessionStorage.removeItem('orzo_auth_pw');
-                    setIsAuthenticated(false);
-                    return true;
-                }
-
-                if (response.ok) {
-                    const text = await response.text();
-                    const json = JSON.parse(text);
-
-                    setDebugCount(json ? json.length : 0);
-                    if (json && json.length > 0) {
-                        setInternalData(json);
-                        setDebugStatus(`연결 성공! (${strategyName}, ${json.length}건)`);
-                        return true;
-                    } else {
-                        setDebugStatus(`연결 성공 (${strategyName}, 데이터 0건)`);
-                        return true;
-                    }
-                }
-            } catch (e) { }
-            return false;
-        };
+        let firestoreUnsubscribe = null;
+        let pollInterval = null;
 
         const fetchData = async () => {
-            if (await fetchWithStrategy('/api/data', 'Proxy')) return;
-            if (await fetchWithStrategy('http://localhost:3000/api/data', 'Localhost')) return;
-            setDebugStatus('모든 연결 시도 실패. (서버가 켜져 있나요?)');
+            setDebugStatus('데이터를 불러오는 중...');
+            try {
+                // [NEW] Attempt Local API First if in dev/local mode
+                const useLocalProxy = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '3000';
+
+                if (useLocalProxy) {
+                    try {
+                        const res = await fetch(`/api/data?pw=${authPassword || 'orzoai'}`, {
+                            headers: {
+                                'x-user-id': encodeURIComponent(user.id),
+                                'x-user-pw': encodeURIComponent(user.pw || '')
+                            }
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            setInternalData(data);
+                            setDebugStatus(`연결 성공! (로컬 서버, ${data.length}건)`);
+                            setDebugCount(data.length);
+
+                            // Optional: polling instead of WebSocket/Snapshot for local
+                            pollInterval = setInterval(async () => {
+                                const checkRes = await fetch(`/api/data?pw=${authPassword || 'orzoai'}`, {
+                                    headers: {
+                                        'x-user-id': encodeURIComponent(user.id),
+                                        'x-user-pw': encodeURIComponent(user.pw || '')
+                                    }
+                                });
+                                if (checkRes.ok) {
+                                    const checkData = await checkRes.json();
+                                    // [PERF] Only update if data actually changed
+                                    setInternalData(prev => {
+                                        if (JSON.stringify(prev) === JSON.stringify(checkData)) return prev;
+                                        setDebugCount(checkData.length);
+                                        return checkData;
+                                    });
+                                }
+                            }, 5000);
+                            return;
+                        }
+                    } catch (localErr) {
+                        console.log("Local API not available, falling back to Firebase.");
+                    }
+                }
+
+                // [FALLBACK] Firebase Firestore
+                let q;
+                if (user.role === 'admin' || user.id === 'admin') {
+                    q = query(collection(db, "records"), orderBy("_uploadedAt", "desc"));
+                } else if (user.role === 'teacher') {
+                    q = query(collection(db, "records"), orderBy("_uploadedAt", "desc"));
+                } else {
+                    q = query(collection(db, "records"), where("name", "==", user.name), orderBy("_uploadedAt", "desc"));
+                }
+
+                firestoreUnsubscribe = onSnapshot(q, (snapshot) => {
+                    const data = snapshot.docs.map(doc => doc.data());
+                    setInternalData(data);
+                    setDebugStatus(`연결 성공! (Firebase, ${data.length}건)`);
+                    setDebugCount(data.length);
+                }, (error) => {
+                    console.error("Firestore Error:", error);
+                    setDebugStatus(`데이터 로드 실패: ${error.message}`);
+                });
+
+            } catch (e) {
+                console.error(e);
+                setDebugStatus('초기화 오류');
+            }
         };
+
         fetchData();
-        const interval = setInterval(fetchData, 2000);
-        return () => clearInterval(interval);
-    }, [isAuthenticated, user, authPassword]);
+        return () => {
+            if (pollInterval) clearInterval(pollInterval);
+            if (firestoreUnsubscribe) firestoreUnsubscribe();
+        };
+    }, [isAuthenticated, user]);
 
     const handleLogin = async (id, pw) => {
         try {
-            // 1. Try Admin Legacy or explicit admin
-            // 1. Try Admin Legacy or explicit admin -> REMOVED HARDCODED CHECK
-            // if (id === 'admin' && pw === 'orzoai') { ... }
+            const safeId = String(id || '').trim();
+            const safePw = String(pw || '').trim();
 
-            // 2. Call API for real verification
-            const res = await fetch('/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id, pw })
-            });
-            const data = await res.json();
-
-            if (data.success) {
-                const userInfo = { ...data.user, pw }; // Store PW for data calls (simple token replacement)
-                sessionStorage.setItem('orzo_user', JSON.stringify(userInfo));
-                setAuthPassword(pw); // [FIX] Ensure auth password is set for data fetching
-                setUser(userInfo);
-                setIsAuthenticated(true);
-            } else {
-                alert(data.message || "로그인 실패");
+            if (!safeId || !safePw) {
+                alert("아이디와 비밀번호를 모두 입력해주세요.");
+                return;
             }
+
+            const email = safeId.includes('@') ? safeId : `${safeId}@orzo.edu`;
+            const userCredential = await signInWithEmailAndPassword(auth, email, safePw);
+            const fbUser = userCredential.user;
+
+            // Fetch user role from Firestore
+            const q = query(collection(db, "users"), where("email", "==", email));
+            const querySnapshot = await getDocs(q);
+            let role = 'student';
+            let name = fbUser.displayName || '사용자';
+            let dbUser = {};
+
+            if (!querySnapshot.empty) {
+                dbUser = querySnapshot.docs[0].data();
+                role = dbUser.role || 'student';
+                name = dbUser.name || name;
+            } else {
+                if (email === 'admin@orzo.edu' || id === 'admin') role = 'admin';
+            }
+
+            const userInfo = {
+                id: email,
+                name: name,
+                role: role,
+                uid: fbUser.uid,
+                ...dbUser
+            };
+
+            sessionStorage.setItem('orzo_user', JSON.stringify(userInfo));
+            setUser(userInfo);
+            setIsAuthenticated(true);
+
         } catch (e) {
             console.error(e);
-            alert("로그인 서버 오류");
+            alert("로그인 실패: " + e.message);
         }
     };
 
-    // [NEW] Register Handler
     const onRegister = async (id, pw, name, center) => {
         try {
-            const res = await fetch('/api/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id, pw, name, center: center || '전체' })
+            const email = id.includes('@') ? id : `${id}@orzo.edu`;
+            const userCredential = await createUserWithEmailAndPassword(auth, email, pw);
+            await updateProfile(userCredential.user, { displayName: name });
+
+            await setDoc(doc(db, "users", id), {
+                uid: userCredential.user.uid,
+                id: id,
+                email: email,
+                name: name,
+                role: 'student',
+                center: center || '전체',
+                approved: true
             });
-            const data = await res.json();
-            if (data.success) {
-                alert(data.message);
-                window.location.reload();
-            } else {
-                alert(data.message);
-            }
+
+            alert("회원가입이 완료되었습니다.");
+            window.location.reload();
         } catch (e) {
-            alert("가입 요청 중 오류가 발생했습니다.");
+            console.error(e);
+            alert("가입 실패: " + e.message);
         }
     };
 
@@ -3067,20 +2985,20 @@ const ChangePasswordButton = ({ user }) => {
     const handleChange = async () => {
         if (!oldPw || !newPw) { alert('모든 필드를 입력하세요.'); return; }
         try {
-            const res = await fetch('/api/change-password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: user.id, oldPw, newPw })
-            });
-            const data = await res.json();
-            if (data.success) {
-                alert('비밀번호가 변경되었습니다. 다시 로그인해주세요.');
-                window.location.reload();
-            } else {
-                alert(data.message);
-            }
+            const user = auth.currentUser;
+            if (!user) { alert("로그인 정보가 없습니다."); return; }
+
+            await updatePassword(user, newPw);
+
+            alert('비밀번호가 변경되었습니다. 다시 로그인해주세요.');
+            window.location.reload();
         } catch (e) {
-            alert('오류가 발생했습니다.');
+            console.error(e);
+            if (e.code === 'auth/requires-recent-login') {
+                alert("보안을 위해 로그아웃 후 다시 로그인하여 시도해주세요.");
+            } else {
+                alert('오류가 발생했습니다: ' + e.message);
+            }
         }
     };
 
